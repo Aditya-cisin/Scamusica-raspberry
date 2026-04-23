@@ -1,6 +1,8 @@
 package com.musicplayer.scamusica.util;
 
 import javax.net.ssl.HttpsURLConnection;
+import javax.crypto.CipherOutputStream;
+import java.net.HttpURLConnection;
 import java.io.*;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
@@ -162,6 +164,65 @@ public class ApiClient {
 
         System.out.println("[ApiClient][DOWNLOAD] Completed successfully");
         return true;
+    }
+
+    public static boolean downloadEncrypted(String urlStr,
+                                            Map<String, String> headers,
+                                            File outFile,
+                                            ProgressCallback callback) {
+
+        HttpURLConnection connection = null;
+
+        try {
+            URL url = new URL(urlStr);
+            connection = (HttpURLConnection) url.openConnection();
+            connection.setRequestMethod("GET");
+
+            if (headers != null) {
+                for (Map.Entry<String, String> entry : headers.entrySet()) {
+                    connection.setRequestProperty(entry.getKey(), entry.getValue());
+                }
+            }
+
+            connection.connect();
+
+            int responseCode = connection.getResponseCode();
+            if (responseCode < 200 || responseCode >= 300) {
+                return false;
+            }
+
+            long contentLength = connection.getContentLengthLong();
+
+            try (InputStream in = connection.getInputStream();
+                 FileOutputStream fos = new FileOutputStream(outFile);
+                 CipherOutputStream cos = CryptoUtil.encrypt(fos)) {
+
+                byte[] buffer = new byte[8192];
+                int bytesRead;
+                long total = 0;
+
+                while ((bytesRead = in.read(buffer)) != -1) {
+                    cos.write(buffer, 0, bytesRead);
+                    cos.flush();
+                    total += bytesRead;
+
+                    if (callback != null) {
+                        callback.onProgress(total, contentLength);
+                    }
+                }
+            }
+
+            return true;
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+
+        } finally {
+            if (connection != null) {
+                connection.disconnect();
+            }
+        }
     }
 
     private static void writeBody(HttpsURLConnection connection, String jsonBody) throws IOException {
