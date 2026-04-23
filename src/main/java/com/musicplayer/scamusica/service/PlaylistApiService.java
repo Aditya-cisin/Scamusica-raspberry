@@ -236,9 +236,21 @@ public class PlaylistApiService {
             }
         }
 
-        String title = (songObj.has("title") && !songObj.get("title").isJsonNull())
-                ? songObj.get("title").getAsString()
-                : "Unknown Title";
+        //        String title = (songObj.has("title") && !songObj.get("title").isJsonNull())
+//                ? songObj.get("title").getAsString()
+//                : "Unknown Title";
+        String title;
+        if (songObj.has("file") && !songObj.get("file").isJsonNull()) {
+            String fileName = songObj.get("file").getAsString();
+            // Remove .mp3 extension
+            title = fileName.endsWith(".mp3")
+                    ? fileName.substring(0, fileName.length() - 4)
+                    : fileName;
+        } else if (songObj.has("title") && !songObj.get("title").isJsonNull()) {
+            title = songObj.get("title").getAsString();
+        } else {
+            title = "Unknown Title";
+        }
 
         String filePath;
         if (songObj.has("filePath") && !songObj.get("filePath").isJsonNull()) {
