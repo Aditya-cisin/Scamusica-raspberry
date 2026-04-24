@@ -51,6 +51,8 @@ public class PlayerController extends Application {
     private VBox playlistDropdownCard;
     private HBox playlistPill;
 
+    private volatile String currentPlaylistName = "";
+
     private final List<PlaylistTrack> playQueue = new ArrayList<>();
     private int currentTrackIndex = 0;
 
@@ -373,6 +375,8 @@ public class PlayerController extends Application {
                                       Label downloadLabel,
                                       boolean autoPlay) throws URISyntaxException {
 
+        this.currentPlaylistName = playlistName;
+
         stopPlayback(progressSlider, leftTime, rightTime, controlsWrapper, downloadLabel);
 
         playQueue.clear();
@@ -675,13 +679,18 @@ public class PlayerController extends Application {
                     + File.separator + ".scamusica"
                     + File.separator + "downloads";
 
-            String genreFolder = track.getFolderTitle().replaceAll("\\s+", "_");
+//            String genreFolder = track.getFolderTitle().replaceAll("\\s+", "_");
+            String genreFolder = currentPlaylistName.replaceAll("\\s+", "_");
 
             File encryptedFile = new File(baseDownloadDir + File.separator + genreFolder,
                     "song-" + track.getId() + ".dat");
 
-            System.out.println("Encrypted file path: " + encryptedFile.getAbsolutePath());
-            System.out.println("File exists: " + encryptedFile.exists());
+            System.out.println("[PlayTrack] currentPlaylistName = " + currentPlaylistName);
+            System.out.println("[PlayTrack] genreFolder = " + genreFolder);
+            System.out.println("[PlayTrack] trackFolderTitle = " + track.getFolderTitle());
+            System.out.println("[PlayTrack] trackId = " + track.getId());
+            System.out.println("[PlayTrack] Encrypted file path: " + encryptedFile.getAbsolutePath());
+            System.out.println("[PlayTrack] File exists: " + encryptedFile.exists());
 
             if (encryptedFile.exists()) {
 
