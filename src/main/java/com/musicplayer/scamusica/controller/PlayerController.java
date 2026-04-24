@@ -18,6 +18,7 @@ import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.*;
 import javafx.scene.media.Media;
+import javafx.scene.media.MediaException;
 import javafx.scene.media.MediaPlayer;
 import javafx.stage.Stage;
 import javafx.util.Duration;
@@ -685,18 +686,28 @@ public class PlayerController extends Application {
             File encryptedFile = new File(baseDownloadDir + File.separator + genreFolder,
                     "song-" + track.getId() + ".dat");
 
-            System.out.println("[PlayTrack] currentPlaylistName = " + currentPlaylistName);
-            System.out.println("[PlayTrack] genreFolder = " + genreFolder);
-            System.out.println("[PlayTrack] trackFolderTitle = " + track.getFolderTitle());
-            System.out.println("[PlayTrack] trackId = " + track.getId());
-            System.out.println("[PlayTrack] Encrypted file path: " + encryptedFile.getAbsolutePath());
-            System.out.println("[PlayTrack] File exists: " + encryptedFile.exists());
+            System.out.println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+            System.out.println("[PlayTrack] Track index      = " + currentTrackIndex);
+            System.out.println("[PlayTrack] Track ID         = " + track.getId());
+            System.out.println("[PlayTrack] Track title      = " + track.getTitle());
+            System.out.println("[PlayTrack] Track URL        = " + track.getUrl());
+            System.out.println("[PlayTrack] folderTitle      = " + track.getFolderTitle());
+            System.out.println("[PlayTrack] currentPlaylist  = " + currentPlaylistName);
+            System.out.println("[PlayTrack] genreFolder      = " + genreFolder);
+            System.out.println("[PlayTrack] Encrypted path   = " + encryptedFile.getAbsolutePath());
+            System.out.println("[PlayTrack] File exists      = " + encryptedFile.exists());
+            System.out.println("[PlayTrack] File size        = " + (encryptedFile.exists() ? encryptedFile.length() + " bytes" : "N/A"));
 
             if (encryptedFile.exists()) {
-
+                System.out.println("[PlayTrack] ✅ Local file found — decrypting to temp...");
                 new Thread(() -> {
                     try {
+                        System.out.println("[PlayTrack][Thread] Starting decryption...");
                         File tempFile = decryptToTemp(encryptedFile);
+
+                        System.out.println("[PlayTrack][Thread] Decryption done. Temp = " + tempFile.getAbsolutePath());
+                        System.out.println("[PlayTrack][Thread] Temp file size = " + tempFile.length() + " bytes");
+
                         String localUrl = tempFile.toURI().toString();
 
                         if (!localUrl.contains(".mp3")) {
@@ -705,10 +716,15 @@ public class PlayerController extends Application {
 
                         final String finalUrl = localUrl;
 
-                        Platform.runLater(() -> {
-                            Media mediaLocal = new Media(finalUrl);
-                            MediaPlayer newPlayer = new MediaPlayer(mediaLocal);
+                        System.out.println("[PlayTrack][Thread] Final local URL = " + finalUrl);
 
+                        Platform.runLater(() -> {
+                            System.out.println("[PlayTrack][UI] Creating Media from local URL...");
+
+                            Media mediaLocal = new Media(finalUrl);
+                            System.out.println("[PlayTrack][UI] Creating Media from local URL...");
+                            MediaPlayer newPlayer = new MediaPlayer(mediaLocal);
+                            System.out.println("[PlayTrack][UI] MediaPlayer created OK");
                             attachMediaPlayerHandlers(newPlayer,
                                     albumHeading,
                                     titleLabel,
@@ -724,6 +740,7 @@ public class PlayerController extends Application {
                         });
 
                     } catch (Exception e) {
+                        System.out.println("[PlayTrack][UI] ❌ Exception creating Media/MediaPlayer: " + e.getMessage());
                         e.printStackTrace();
                     }
                 }).start();
@@ -733,9 +750,13 @@ public class PlayerController extends Application {
             }
 
         } catch (Exception e) {
+            System.out.println("[PlayTrack][Thread] ❌ Decryption failed: " + e.getMessage());
             e.printStackTrace();
         }
 
+        System.out.println("[PlayTrack] ⚠️ Local file NOT found — falling back to stream URL");
+        System.out.println("[PlayTrack] Stream URL = " + safeUrl);
+        System.out.println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
         Media media = new Media(safeUrl);
         MediaPlayer newPlayer = new MediaPlayer(media);
 
@@ -764,12 +785,82 @@ public class PlayerController extends Application {
                                            Label downloadLabel,
                                            boolean autoPlay) {
 
+        System.out.println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+        System.out.println("[MediaPlayer] attachMediaPlayerHandlers() called");
+        System.out.println("[MediaPlayer] autoPlay = " + autoPlay);
+
+
+        Media media = mediaPlayer.getMedia();
+        if (media != null) {
+            System.out.println("[MediaPlayer] Media source URI = " + media.getSource());
+        } else {
+            System.out.println("[MediaPlayer] ⚠️ Media object is NULL");
+        }
+
+        // ── STATUS LISTENER ──────────────────────────────────────────
+        mediaPlayer.statusProperty().addListener((obs, oldStatus, newStatus) -> {
+            System.out.println("[MediaPlayer][STATUS] " + oldStatus + " → " + newStatus);
+        });
+
         mediaPlayer.setOnError(() -> {
-            System.out.println("Media Player Error: " + mediaPlayer.getError().getMessage());
+            MediaException error = mediaPlayer.getError();
+            if (error != null) {
+                System.out.println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+                System.out.println("[MediaPlayer][ERROR] ❌ Type    = " + error.getType());
+                System.out.println("[MediaPlayer][ERROR] ❌ Message = " + error.getMessage());
+                Throwable cause = error.getCause();
+                if (cause != null) {
+                    System.out.println("[MediaPlayer][ERROR] ❌ Cause   = " + cause.getMessage());
+                    cause.printStackTrace();
+                } else {
+                    System.out.println("[MediaPlayer][ERROR] ❌ Cause   = (null)");
+                }
+                System.out.println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+            } else {
+                System.out.println("[MediaPlayer][ERROR] ❌ Error fired but getError() is NULL");
+            }
+        });
+
+        // ── MEDIA ERROR LISTENER (Media object level) ─────────────────
+        if (media != null) {
+            media.setOnError(() -> {
+                MediaException me = media.getError();
+                if (me != null) {
+                    System.out.println("[Media][ERROR] ❌ Media-level error: " + me.getType() + " — " + me.getMessage());
+                    if (me.getCause() != null) {
+                        System.out.println("[Media][ERROR] ❌ Cause: " + me.getCause().getMessage());
+                    }
+                }
+            });
+        }
+
+        // ── STALLED ──────────────────────────────────────────────────
+        mediaPlayer.setOnStalled(() -> {
+            System.out.println("[MediaPlayer][STALLED] ⚠️ Playback stalled (buffering?)");
+        });
+
+        // ── BUFFERING ────────────────────────────────────────────────
+        mediaPlayer.bufferProgressTimeProperty().addListener((obs, oldVal, newVal) -> {
+            System.out.println("[MediaPlayer][BUFFER] Buffered up to = " + newVal);
         });
 
         mediaPlayer.setOnReady(() -> {
+
+            System.out.println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+            System.out.println("[MediaPlayer][READY] ✅ Media is READY");
+
             Duration mediaDuration = mediaPlayer.getMedia().getDuration();
+
+            System.out.println("[MediaPlayer][READY] Duration (raw)     = " + mediaDuration);
+            System.out.println("[MediaPlayer][READY] Duration (seconds) = " + mediaDuration.toSeconds());
+
+            // Print all media metadata
+            System.out.println("[MediaPlayer][READY] --- Metadata ---");
+            mediaPlayer.getMedia().getMetadata().forEach((k, v) ->
+                    System.out.println("[MediaPlayer][READY] Meta: " + k + " = " + v)
+            );
+            System.out.println("[MediaPlayer][READY] --- End Metadata ---");
+
             int durationSeconds = (int) Math.max(1, mediaDuration.toSeconds());
 
             controlsUtil.setupMediaBindingsWithDuration(
@@ -803,6 +894,7 @@ public class PlayerController extends Application {
             );
 
             mediaPlayer.setOnEndOfMedia(() -> {
+                System.out.println("[MediaPlayer][END] Track ended. Moving to next...");
                 try {
                     playNextTrack(
                             albumHeading,
@@ -822,17 +914,21 @@ public class PlayerController extends Application {
             FontIcon bigIcon = controlsUtil.getBigPlayIcon(controlsWrapper);
 
             if (autoPlay) {
+                System.out.println("[MediaPlayer][READY] ▶ autoPlay=true → calling play()");
                 if (bigIcon != null) {
                     bigIcon.setIconLiteral("fas-pause");
                 }
                 mediaPlayer.play();
             } else {
+                System.out.println("[MediaPlayer][READY] ⏸ autoPlay=false → calling pause()");
                 if (bigIcon != null) {
                     bigIcon.setIconLiteral("fas-play");
                 }
                 mediaPlayer.pause();
                 mediaPlayer.seek(Duration.ZERO);
             }
+
+            System.out.println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
         });
     }
 
