@@ -17,12 +17,11 @@ import javafx.scene.control.*;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.*;
-import javafx.scene.media.Media;
-import javafx.scene.media.MediaException;
-import javafx.scene.media.MediaPlayer;
 import javafx.stage.Stage;
-import javafx.util.Duration;
 import org.kordamp.ikonli.javafx.FontIcon;
+import uk.co.caprica.vlcj.player.base.MediaPlayer;
+import uk.co.caprica.vlcj.player.base.MediaPlayerEventAdapter;
+import uk.co.caprica.vlcj.player.component.AudioPlayerComponent;
 
 import javax.crypto.CipherInputStream;
 import java.io.File;
@@ -41,7 +40,10 @@ import java.util.stream.Collectors;
 
 public class PlayerController extends Application {
 
-    private MediaPlayer mediaPlayer;
+    private MediaPlayer vlcPlayer;
+    private AudioPlayerComponent vlcPlayerComponent;
+
+    private boolean vlcHandlersAttached = false;
 
     private final PlayerSidebar sidebarUtil = new PlayerSidebar();
     private final PlayerHeader headerUtil = new PlayerHeader();
@@ -79,6 +81,10 @@ public class PlayerController extends Application {
 
     @Override
     public void start(Stage primaryStage) {
+
+        vlcPlayerComponent = new AudioPlayerComponent();
+        vlcPlayer = vlcPlayerComponent.mediaPlayer();
+
         Button headphonesButton = sidebarUtil.createIconButton("fas-headphones");
         List<Button> sidebarButtons = Arrays.asList(headphonesButton);
         sidebarUtil.addSidebarLogic(sidebarButtons, headphonesButton);
@@ -225,10 +231,9 @@ public class PlayerController extends Application {
         primaryStage.setOnCloseRequest(event -> {
             System.out.println("[PlayerController] Closing application...");
 
-            if (mediaPlayer != null) {
+            if (vlcPlayer != null) {
                 try {
-                    mediaPlayer.stop();
-                    mediaPlayer.dispose();
+                    vlcPlayer.controls().stop();
                 } catch (Exception ignored) {
                 }
             }
@@ -248,8 +253,57 @@ public class PlayerController extends Application {
         primaryStage.show();
 
         Platform.runLater(() -> {
+
+            Button forwardBtn = (Button) controlsWrapper.lookup("#forwardButton");
+
+            if (forwardBtn != null) {
+                forwardBtn.setOnAction(e -> {
+                    try {
+                        long currentTime = vlcPlayer.status().time();
+                        long duration = vlcPlayer.status().length();
+
+                        long newTime = currentTime + 10_000;
+
+                        if (duration > 0 && newTime > duration) {
+                            newTime = duration;
+                        }
+
+                        vlcPlayer.controls().setTime(newTime);
+
+                    } catch (Exception ex) {
+                        ex.printStackTrace();
+                    }
+                });
+            }
+
+            progressSlider.setOnMouseReleased(e -> {
+                float pos = (float) (progressSlider.getValue() / 100.0);
+                vlcPlayer.controls().setPosition(pos);
+            });
+
             controlsUtil.setupSliderFill(progressSlider);
             controlsUtil.setupVolumeSliderFill(controlsUtil.getVolumeSlider(bottomBar));
+
+            Slider volumeSlider = controlsUtil.getVolumeSlider(bottomBar);
+
+            if (volumeSlider != null) {
+                volumeSlider.valueProperty().addListener((obs, oldVal, newVal) -> {
+                    vlcPlayer.audio().setVolume(newVal.intValue());
+                });
+
+                vlcPlayer.audio().setVolume((int) volumeSlider.getValue());
+            }
+
+            setupBigPlayBehaviour(
+                    albumHeading,
+                    titleCentered,
+                    controlsWrapper,
+                    progressSlider,
+                    leftTime,
+                    rightTime,
+                    bottomBar,
+                    downloadLabel
+            );
 
             try {
                 loadPlaylistAndStart(
@@ -495,7 +549,7 @@ public class PlayerController extends Application {
                                     updatePlayButtonState(controlsWrapper);
 
                                     if (newGenreCount >= 2) {
-                                        if (mediaPlayer == null || mediaPlayer.getStatus() != MediaPlayer.Status.PLAYING) {
+                                        if (!vlcPlayer.status().isPlaying()) {
                                             try {
                                                 System.out.println("[AutoPlay] 2 songs downloaded. Starting playback." +
                                                         "..");
@@ -658,13 +712,11 @@ public class PlayerController extends Application {
 
         titleLabel.setText(track.getTitle());
 
-        if (mediaPlayer != null) {
+        if (vlcPlayer != null) {
             try {
-                mediaPlayer.stop();
-                mediaPlayer.dispose();
+                vlcPlayer.controls().stop();
             } catch (Exception ignored) {
             }
-            mediaPlayer = null;
         }
 
         String safeUrl = encodeMediaUrl(track.getUrl());
@@ -721,22 +773,22 @@ public class PlayerController extends Application {
                         Platform.runLater(() -> {
                             System.out.println("[PlayTrack][UI] Creating Media from local URL...");
 
-                            Media mediaLocal = new Media(finalUrl);
-                            System.out.println("[PlayTrack][UI] Creating Media from local URL...");
-                            MediaPlayer newPlayer = new MediaPlayer(mediaLocal);
-                            System.out.println("[PlayTrack][UI] MediaPlayer created OK");
-                            attachMediaPlayerHandlers(newPlayer,
-                                    albumHeading,
-                                    titleLabel,
-                                    progressSlider,
-                                    leftTime,
-                                    rightTime,
-                                    controlsWrapper,
-                                    bottomBar,
-                                    downloadLabel,
-                                    autoPlay);
+                            vlcPlayer.media().play(tempFile.getAbsolutePath());
 
-                            mediaPlayer = newPlayer;
+                            if (!vlcHandlersAttached) {
+                                attachVlcHandlers(
+                                        albumHeading,
+                                        titleLabel,
+                                        progressSlider,
+                                        leftTime,
+                                        rightTime,
+                                        controlsWrapper,
+                                        bottomBar,
+                                        downloadLabel,
+                                        autoPlay
+                                );
+                                vlcHandlersAttached = true;
+                            }
                         });
 
                     } catch (Exception e) {
@@ -757,178 +809,105 @@ public class PlayerController extends Application {
         System.out.println("[PlayTrack] ⚠️ Local file NOT found — falling back to stream URL");
         System.out.println("[PlayTrack] Stream URL = " + safeUrl);
         System.out.println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-        Media media = new Media(safeUrl);
-        MediaPlayer newPlayer = new MediaPlayer(media);
 
-        attachMediaPlayerHandlers(newPlayer,
-                albumHeading,
-                titleLabel,
-                progressSlider,
-                leftTime,
-                rightTime,
-                controlsWrapper,
-                bottomBar,
-                downloadLabel,
-                autoPlay);
+        vlcPlayer.media().play(safeUrl);
 
-        mediaPlayer = newPlayer;
-    }
-
-    private void attachMediaPlayerHandlers(MediaPlayer mediaPlayer,
-                                           Label albumHeading,
-                                           Label titleLabel,
-                                           Slider progressSlider,
-                                           Label leftTime,
-                                           Label rightTime,
-                                           HBox controlsWrapper,
-                                           HBox bottomBar,
-                                           Label downloadLabel,
-                                           boolean autoPlay) {
-
-        System.out.println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-        System.out.println("[MediaPlayer] attachMediaPlayerHandlers() called");
-        System.out.println("[MediaPlayer] autoPlay = " + autoPlay);
-
-
-        Media media = mediaPlayer.getMedia();
-        if (media != null) {
-            System.out.println("[MediaPlayer] Media source URI = " + media.getSource());
-        } else {
-            System.out.println("[MediaPlayer] ⚠️ Media object is NULL");
-        }
-
-        // ── STATUS LISTENER ──────────────────────────────────────────
-        mediaPlayer.statusProperty().addListener((obs, oldStatus, newStatus) -> {
-            System.out.println("[MediaPlayer][STATUS] " + oldStatus + " → " + newStatus);
-        });
-
-        mediaPlayer.setOnError(() -> {
-            MediaException error = mediaPlayer.getError();
-            if (error != null) {
-                System.out.println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-                System.out.println("[MediaPlayer][ERROR] ❌ Type    = " + error.getType());
-                System.out.println("[MediaPlayer][ERROR] ❌ Message = " + error.getMessage());
-                Throwable cause = error.getCause();
-                if (cause != null) {
-                    System.out.println("[MediaPlayer][ERROR] ❌ Cause   = " + cause.getMessage());
-                    cause.printStackTrace();
-                } else {
-                    System.out.println("[MediaPlayer][ERROR] ❌ Cause   = (null)");
-                }
-                System.out.println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-            } else {
-                System.out.println("[MediaPlayer][ERROR] ❌ Error fired but getError() is NULL");
-            }
-        });
-
-        // ── MEDIA ERROR LISTENER (Media object level) ─────────────────
-        if (media != null) {
-            media.setOnError(() -> {
-                MediaException me = media.getError();
-                if (me != null) {
-                    System.out.println("[Media][ERROR] ❌ Media-level error: " + me.getType() + " — " + me.getMessage());
-                    if (me.getCause() != null) {
-                        System.out.println("[Media][ERROR] ❌ Cause: " + me.getCause().getMessage());
-                    }
-                }
-            });
-        }
-
-        // ── STALLED ──────────────────────────────────────────────────
-        mediaPlayer.setOnStalled(() -> {
-            System.out.println("[MediaPlayer][STALLED] ⚠️ Playback stalled (buffering?)");
-        });
-
-        // ── BUFFERING ────────────────────────────────────────────────
-        mediaPlayer.bufferProgressTimeProperty().addListener((obs, oldVal, newVal) -> {
-            System.out.println("[MediaPlayer][BUFFER] Buffered up to = " + newVal);
-        });
-
-        mediaPlayer.setOnReady(() -> {
-
-            System.out.println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-            System.out.println("[MediaPlayer][READY] ✅ Media is READY");
-
-            Duration mediaDuration = mediaPlayer.getMedia().getDuration();
-
-            System.out.println("[MediaPlayer][READY] Duration (raw)     = " + mediaDuration);
-            System.out.println("[MediaPlayer][READY] Duration (seconds) = " + mediaDuration.toSeconds());
-
-            // Print all media metadata
-            System.out.println("[MediaPlayer][READY] --- Metadata ---");
-            mediaPlayer.getMedia().getMetadata().forEach((k, v) ->
-                    System.out.println("[MediaPlayer][READY] Meta: " + k + " = " + v)
-            );
-            System.out.println("[MediaPlayer][READY] --- End Metadata ---");
-
-            int durationSeconds = (int) Math.max(1, mediaDuration.toSeconds());
-
-            controlsUtil.setupMediaBindingsWithDuration(
-                    mediaPlayer,
-                    progressSlider,
-                    leftTime,
-                    rightTime,
-                    durationSeconds
-            );
-
-            controlsUtil.setupControlEvents(
-                    controlsWrapper,
-                    mediaPlayer,
-                    progressSlider,
-                    leftTime,
-                    rightTime,
-                    controlsUtil.getVolumeSlider(bottomBar),
-                    durationSeconds,
-                    downloadLabel
-            );
-
-            setupBigPlayBehaviour(
+        if (!vlcHandlersAttached) {
+            attachVlcHandlers(
                     albumHeading,
                     titleLabel,
-                    controlsWrapper,
                     progressSlider,
                     leftTime,
                     rightTime,
+                    controlsWrapper,
                     bottomBar,
-                    downloadLabel
+                    downloadLabel,
+                    autoPlay
             );
+            vlcHandlersAttached = true;
+        }
 
-            mediaPlayer.setOnEndOfMedia(() -> {
-                System.out.println("[MediaPlayer][END] Track ended. Moving to next...");
-                try {
-                    playNextTrack(
-                            albumHeading,
-                            titleLabel,
-                            progressSlider,
-                            leftTime,
-                            rightTime,
-                            controlsWrapper,
-                            bottomBar,
-                            downloadLabel
-                    );
-                } catch (URISyntaxException e) {
-                    throw new RuntimeException(e);
-                }
-            });
 
-            FontIcon bigIcon = controlsUtil.getBigPlayIcon(controlsWrapper);
+    }
 
-            if (autoPlay) {
-                System.out.println("[MediaPlayer][READY] ▶ autoPlay=true → calling play()");
-                if (bigIcon != null) {
-                    bigIcon.setIconLiteral("fas-pause");
-                }
-                mediaPlayer.play();
-            } else {
-                System.out.println("[MediaPlayer][READY] ⏸ autoPlay=false → calling pause()");
-                if (bigIcon != null) {
-                    bigIcon.setIconLiteral("fas-play");
-                }
-                mediaPlayer.pause();
-                mediaPlayer.seek(Duration.ZERO);
+    private void attachVlcHandlers(
+            Label albumHeading,
+            Label titleLabel,
+            Slider progressSlider,
+            Label leftTime,
+            Label rightTime,
+            HBox controlsWrapper,
+            HBox bottomBar,
+            Label downloadLabel,
+            boolean autoPlay
+    ) {
+
+        vlcPlayer.events().addMediaPlayerEventListener(new MediaPlayerEventAdapter() {
+
+            @Override
+            public void playing(MediaPlayer mediaPlayer) {
+                Platform.runLater(() -> {
+                    FontIcon bigIcon = controlsUtil.getBigPlayIcon(controlsWrapper);
+                    if (bigIcon != null) {
+                        bigIcon.setIconLiteral("fas-pause");
+                    }
+                });
             }
 
-            System.out.println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+            @Override
+            public void paused(MediaPlayer mediaPlayer) {
+                Platform.runLater(() -> {
+                    FontIcon bigIcon = controlsUtil.getBigPlayIcon(controlsWrapper);
+                    if (bigIcon != null) {
+                        bigIcon.setIconLiteral("fas-play");
+                    }
+                });
+            }
+
+            @Override
+            public void stopped(MediaPlayer mediaPlayer) {
+                Platform.runLater(() -> {
+                    FontIcon bigIcon = controlsUtil.getBigPlayIcon(controlsWrapper);
+                    if (bigIcon != null) {
+                        bigIcon.setIconLiteral("fas-play");
+                    }
+                });
+            }
+
+            @Override
+            public void timeChanged(MediaPlayer mediaPlayer, long newTime) {
+                Platform.runLater(() -> {
+                    long duration = mediaPlayer.status().length();
+
+                    if (duration > 0) {
+                        double progress = (double) newTime / duration;
+                        progressSlider.setValue(progress * 100);
+
+                        leftTime.setText(formatTime(newTime / 1000));
+                        rightTime.setText("-" + formatTime((duration - newTime) / 1000));
+                    }
+                });
+            }
+
+            @Override
+            public void finished(MediaPlayer mediaPlayer) {
+                Platform.runLater(() -> {
+                    try {
+                        playNextTrack(
+                                albumHeading,
+                                titleLabel,
+                                progressSlider,
+                                leftTime,
+                                rightTime,
+                                controlsWrapper,
+                                bottomBar,
+                                downloadLabel
+                        );
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                });
+            }
         });
     }
 
@@ -991,7 +970,7 @@ public class PlayerController extends Application {
                 return;
             }
 
-            if (mediaPlayer == null || currentTrackIndex >= playQueue.size() || currentTrackIndex < 0) {
+            if (currentTrackIndex >= playQueue.size() || currentTrackIndex < 0) {
                 currentTrackIndex = 0;
                 try {
                     playTrack(
@@ -1011,15 +990,23 @@ public class PlayerController extends Application {
                 return;
             }
 
-            MediaPlayer.Status status = mediaPlayer.getStatus();
-            if (status == MediaPlayer.Status.PLAYING) {
-                mediaPlayer.pause();
+//            MediaPlayer.Status status = mediaPlayer.getStatus();
+//            if (status == MediaPlayer.Status.PLAYING) {
+//                mediaPlayer.pause();
+//                bigIcon.setIconLiteral("fas-play");
+//                bigIcon.setIconColor(javafx.scene.paint.Color.WHITE);
+//            } else {
+//                mediaPlayer.play();
+//                bigIcon.setIconLiteral("fas-pause");
+//                bigIcon.setIconColor(javafx.scene.paint.Color.WHITE);
+//            }
+
+            if (vlcPlayer.status().isPlaying()) {
+                vlcPlayer.controls().pause();
                 bigIcon.setIconLiteral("fas-play");
-                bigIcon.setIconColor(javafx.scene.paint.Color.WHITE);
             } else {
-                mediaPlayer.play();
+                vlcPlayer.controls().play();
                 bigIcon.setIconLiteral("fas-pause");
-                bigIcon.setIconColor(javafx.scene.paint.Color.WHITE);
             }
         });
     }
@@ -1030,13 +1017,13 @@ public class PlayerController extends Application {
                               HBox controlsWrapper,
                               Label downloadLabel) {
 
-        if (mediaPlayer != null) {
+        if (vlcPlayer != null) {
             try {
-                mediaPlayer.stop();
-                mediaPlayer.dispose();
+//                mediaPlayer.stop();
+//                mediaPlayer.dispose();
+                vlcPlayer.controls().stop();
             } catch (Exception ignored) {
             }
-            mediaPlayer = null;
         }
 
         if (leftTime != null) {
@@ -1134,6 +1121,11 @@ public class PlayerController extends Application {
         return tempFile;
     }
 
+    private String formatTime(long seconds) {
+        long m = seconds / 60;
+        long s = seconds % 60;
+        return String.format("%d:%02d", m, s);
+    }
 
     public static void main(String[] args) {
         launch(args);

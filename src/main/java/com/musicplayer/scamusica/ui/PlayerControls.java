@@ -5,12 +5,8 @@ import javafx.application.Platform;
 import javafx.beans.binding.Bindings;
 import javafx.geometry.Insets;
 import javafx.scene.Node;
-import javafx.scene.control.Button;
-import javafx.scene.control.Label;
-import javafx.scene.control.Slider;
+import javafx.scene.control.*;
 import javafx.scene.layout.*;
-import javafx.scene.media.Media;
-import javafx.scene.media.MediaPlayer;
 import javafx.scene.paint.Color;
 import javafx.util.Duration;
 import org.kordamp.ikonli.javafx.FontIcon;
@@ -95,6 +91,7 @@ public class PlayerControls {
         FontIcon forwardIcon = new FontIcon("fas-forward");
         forwardIcon.setIconSize(26);
         Button forwardBtn = new Button("", forwardIcon);
+        forwardBtn.setId("forwardButton");
         forwardBtn.getStyleClass().add("control-icon");
         forwardBtn.getStyleClass().add("small-control");
 
@@ -191,18 +188,6 @@ public class PlayerControls {
         return bottomBar;
     }
 
-    public Media loadMedia(Class<?> clazz) {
-        Media media = null;
-        try {
-            URL mediaUrl = clazz.getResource("/audio/sample.mp3");
-            if (mediaUrl == null) System.err.println("audio resource /audio/sample.mp3 not found.");
-            else media = new Media(mediaUrl.toURI().toString());
-        } catch (URISyntaxException | NullPointerException ex) {
-            System.err.println("media error: " + ex.getMessage());
-        }
-        return media;
-    }
-
     public void setupSliderFill(Slider progressSlider) {
         Node pTrackNode = progressSlider.lookup(".track");
         if (pTrackNode instanceof Region) {
@@ -249,175 +234,6 @@ public class PlayerControls {
                 " 100%);" +
                 "-fx-background-radius: 6;";
         track.setStyle(style);
-    }
-
-    public void setupMediaBindings(MediaPlayer mediaPlayer, Slider progressSlider, Label leftTime, Label rightTime) {
-        mediaPlayer.setOnReady(() -> {
-            Duration total = mediaPlayer.getMedia().getDuration();
-            if (total != null && !total.isUnknown()) {
-                progressSlider.setMax(total.toMillis());
-                updateTimeLabel(rightTime, total, true);
-            }
-        });
-        mediaPlayer.currentTimeProperty().addListener((obs, oldT, newT) -> {
-            if (!seeking) {
-                Duration current = newT;
-                progressSlider.setValue(current.toMillis());
-                updateTimeLabel(leftTime, current, false);
-                Duration total = mediaPlayer.getMedia().getDuration();
-                if (total != null && !total.isUnknown()) {
-                    Duration remaining = total.subtract(current);
-                    updateTimeLabel(rightTime, remaining, true);
-                }
-            }
-        });
-    }
-
-    public void setupMediaBindingsWithDuration(MediaPlayer mediaPlayer,
-                                               Slider progressSlider,
-                                               Label leftTime,
-                                               Label rightTime,
-                                               int durationSeconds) {
-
-        Duration total = Duration.seconds(durationSeconds);
-        progressSlider.setMax(total.toMillis());
-        updateTimeLabel(rightTime, total, true);
-
-        mediaPlayer.currentTimeProperty().addListener((obs, oldT, newT) -> {
-            if (!seeking) {
-                Duration current = newT;
-                progressSlider.setValue(current.toMillis());
-                updateTimeLabel(leftTime, current, false);
-
-                Duration remaining = total.subtract(current);
-                if (remaining.lessThan(Duration.ZERO)) {
-                    remaining = Duration.ZERO;
-                }
-                updateTimeLabel(rightTime, remaining, true);
-            }
-        });
-
-        mediaPlayer.setOnReady(() -> {
-            updateTimeLabel(leftTime, Duration.ZERO, false);
-            updateTimeLabel(rightTime, total, true);
-        });
-    }
-
-    public void setupControlEvents(HBox controlsWrapper,
-                                   MediaPlayer mediaPlayer,
-                                   Slider progressSlider,
-                                   Label leftTime,
-                                   Label rightTime,
-                                   Slider volumeSlider,
-                                   Integer durationSeconds,
-                                   Label downloadLabel) {
-
-        progressSlider.setOnMousePressed(e -> seeking = true);
-        progressSlider.setOnMouseReleased(e -> {
-            seeking = false;
-            if (mediaPlayer == null) return;
-            try {
-                mediaPlayer.seek(Duration.millis(progressSlider.getValue()));
-            } catch (NullPointerException ex) {
-                System.out.println("Seek skipped (player disposed) on mouse release");
-            }
-        });
-
-        progressSlider.valueChangingProperty().addListener((obs, wasChanging, isNowChanging) -> {
-            if (!isNowChanging) {
-                if (mediaPlayer == null) return;
-                try {
-                    mediaPlayer.seek(Duration.millis(progressSlider.getValue()));
-                } catch (NullPointerException ex) {
-                    System.out.println("Seek skipped (player disposed) on valueChanging");
-                }
-            }
-        });
-
-        Button bigPlayBtn = (Button) ((StackPane) controlsWrapper.getChildren().get(1)).getChildren().get(0);
-        FontIcon bigIcon = (FontIcon) bigPlayBtn.getGraphic();
-
-        bigPlayBtn.setOnAction(e -> {
-            boolean hasDuration = (durationSeconds != null && durationSeconds > 0);
-            double curSec = mediaPlayer != null ? mediaPlayer.getCurrentTime().toSeconds() : 0.0;
-            boolean atEnd = hasDuration && curSec >= durationSeconds - 0.05;
-
-            if (mediaPlayer != null && atEnd) {
-                try {
-                    mediaPlayer.pause();
-                    mediaPlayer.seek(Duration.ZERO);
-                } catch (Exception ignored) {
-                }
-                progressSlider.setValue(0);
-
-                updateTimeLabel(leftTime, Duration.ZERO, false);
-                if (hasDuration) {
-                    updateTimeLabel(rightTime, Duration.seconds(durationSeconds), true);
-                }
-
-                if (downloadLabel != null) {
-                    downloadLabel.textProperty().bind(
-                            Bindings.concat(
-                                    "0%",
-                                    " ",
-                                    LanguageManager.createStringBinding("label.download")
-                            ));
-                }
-            }
-
-            if (mediaPlayer == null) return;
-
-            MediaPlayer.Status status = mediaPlayer.getStatus();
-            if (status == MediaPlayer.Status.PLAYING) {
-                mediaPlayer.pause();
-                bigIcon.setIconLiteral("fas-play");
-                bigIcon.setIconColor(Color.WHITE);
-            } else {
-                mediaPlayer.play();
-                bigIcon.setIconLiteral("fas-pause");
-                bigIcon.setIconColor(Color.WHITE);
-            }
-        });
-
-        Button forwardBtn = (Button) ((HBox) controlsWrapper.getChildren().get(2)).getChildren().get(0);
-        forwardBtn.setOnAction(e -> {
-            if (mediaPlayer == null) return;
-            try {
-                Duration cur = mediaPlayer.getCurrentTime();
-                Duration dur = mediaPlayer.getMedia().getDuration();
-                Duration next = cur.add(Duration.seconds(10));
-                if (dur != null && !dur.isUnknown() && next.greaterThan(dur)) next = dur;
-                mediaPlayer.seek(next);
-            } catch (NullPointerException ex) {
-                System.out.println("Forward seek skipped (player disposed)");
-            }
-        });
-
-        if (volumeSlider != null) {
-            volumeSlider.valueProperty().addListener((obs, oldV, newV) -> {
-                if (mediaPlayer == null) return;
-                try {
-                    mediaPlayer.setVolume(newV.doubleValue() / 100.0);
-                } catch (NullPointerException ex) {
-                    System.out.println("Volume change skipped (player disposed)");
-                }
-            });
-            try {
-                mediaPlayer.setVolume(volumeSlider.getValue() / 100.0);
-            } catch (NullPointerException ex) {
-                System.out.println("Initial volume set skipped (player disposed)");
-            }
-        }
-    }
-
-    /**
-     * NOTE: This method intentionally does NOT bind downloadLabel to media time anymore.
-     * Download percentage is controlled by the controller (per-genre logic).
-     */
-    public void setupDownloadProgressLabel(MediaPlayer mediaPlayer,
-                                           Label downloadLabel,
-                                           int durationSeconds) {
-        // no-op: controller updates downloadLabel with genre-based percent.
     }
 
     public void setupBigPlayButtonDummy(HBox controlsWrapper) {
