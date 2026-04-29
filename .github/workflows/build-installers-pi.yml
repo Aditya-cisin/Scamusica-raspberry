@@ -118,11 +118,59 @@ jobs:
           -keystore target/scamusica-runtime/lib/security/cacerts \
           -storepass changeit | grep -E "cis-root|new-cert-1|new-cert-2"
 
-    - name: Package into DEB
-      working-directory: ${{ env.PROJECT_PATH }}
+    - name: Install VLC
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y vlc
+
+    - name: Prepare jpackage input
       run: |
         mkdir -p target/jpackage-input
         cp target/$JAR_NAME target/jpackage-input/
+
+    - name: Copy VLC libs
+      run: |
+        mkdir -p target/jpackage-input/lib/vlc
+             
+        echo "🔍 Detecting VLC paths..."
+             
+        VLC_LIB=$(ldconfig -p | grep libvlc.so | head -1 | awk '{print $NF}')
+        VLC_CORE=$(ldconfig -p | grep libvlccore.so | head -1 | awk '{print $NF}')
+             
+        if [ -z "$VLC_LIB" ] || [ -z "$VLC_CORE" ]; then
+        echo "❌ VLC libs not found!"
+        exit 1
+        fi
+             
+        echo "✅ libvlc: $VLC_LIB"
+        echo "✅ libvlccore: $VLC_CORE"
+             
+        cp "$VLC_LIB" target/jpackage-input/lib/vlc/
+        cp "$VLC_CORE" target/jpackage-input/lib/vlc/
+             
+        # plugins path detect
+        VLC_PLUGIN_DIR=$(dirname $VLC_LIB)/vlc/plugins
+             
+        if [ ! -d "$VLC_PLUGIN_DIR" ]; then
+        echo "❌ VLC plugins not found!"
+        exit 1
+        fi
+             
+        echo "✅ plugins: $VLC_PLUGIN_DIR"
+             
+        cp -r $VLC_PLUGIN_DIR target/jpackage-input/lib/vlc/
+
+    - name: Verify VLC bundle
+      run: |
+        echo "🔎 Checking VLC files..."
+        ls -lh target/jpackage-input/lib/vlc
+        ls -lh target/jpackage-input/lib/vlc/plugins | head
+
+    - name: Package into DEB
+      working-directory: ${{ env.PROJECT_PATH }}
+      run: |
+#        mkdir -p target/jpackage-input
+#        cp target/$JAR_NAME target/jpackage-input/
 
         echo "📦 Input folder:"
         ls -lh target/jpackage-input

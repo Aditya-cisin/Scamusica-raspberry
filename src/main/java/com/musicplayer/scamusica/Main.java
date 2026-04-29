@@ -6,9 +6,32 @@ import com.musicplayer.scamusica.manager.LanguageManager;
 import com.musicplayer.scamusica.manager.SessionManager;
 import javafx.application.Application;
 import javafx.stage.Stage;
-import java.security.Security;
 
 public class Main extends Application {
+
+    private static void setupVlc() {
+        try {
+            String basePath = new java.io.File(
+                    Main.class.getProtectionDomain()
+                            .getCodeSource()
+                            .getLocation()
+                            .toURI()
+            ).getParent();
+
+            String vlcPath = basePath + "/lib/vlc";
+            String pluginPath = vlcPath + "/plugins";
+
+            System.setProperty("jna.library.path", vlcPath);
+            System.setProperty("VLC_PLUGIN_PATH", pluginPath);
+
+            System.out.println("✅ VLC Path: " + vlcPath);
+            System.out.println("✅ Plugin Path: " + pluginPath);
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
     @Override
     public void start(Stage primaryStage) {
          // ✅ Set proxy BEFORE anything else
@@ -29,6 +52,7 @@ public class Main extends Application {
     }
 
     public static void main(String[] args) {
+        setupVlc();
         launch(args);
     }
 }
