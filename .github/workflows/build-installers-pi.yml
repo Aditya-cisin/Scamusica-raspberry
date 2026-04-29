@@ -169,9 +169,6 @@ jobs:
     - name: Package into DEB
       working-directory: ${{ env.PROJECT_PATH }}
       run: |
-#        mkdir -p target/jpackage-input
-#        cp target/$JAR_NAME target/jpackage-input/
-
         echo "📦 Input folder:"
         ls -lh target/jpackage-input
 
