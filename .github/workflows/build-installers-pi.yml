@@ -184,7 +184,8 @@ jobs:
           --runtime-image target/scamusica-runtime \
           --linux-shortcut \
           --linux-menu-group Audio \
-          --linux-package-deps "libgtk-3-0,libglib2.0-0,libasound2,libatk1.0-0,libatk-bridge2.0-0,libatspi2.0-0,libpng16-16,libjpeg62-turbo,libpcre2-8-0,libx11-6,libxext6,libxrender1,libxtst6,libxi6" \
+          --linux-package-deps "libgtk-3-0,libglib2.0-0,libasound2,libpng16-16,libjpeg62-turbo,libpcre2-8-0,libx11-6,libxext6,libxrender1,libxtst6,libxi6" \
+          --java-options "-Djna.library.path=\$APPDIR/lib/vlc -DVLC_PLUGIN_PATH=\$APPDIR/lib/vlc/plugins" \
           --verbose
 
     - name: Verify package architecture
