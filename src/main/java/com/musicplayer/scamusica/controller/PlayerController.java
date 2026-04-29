@@ -84,6 +84,7 @@ public class PlayerController extends Application {
 
         vlcPlayerComponent = new AudioPlayerComponent();
         vlcPlayer = vlcPlayerComponent.mediaPlayer();
+        System.out.println("🔥 [VLC INIT] Player created: " + vlcPlayer);
 
         Button headphonesButton = sidebarUtil.createIconButton("fas-headphones");
         List<Button> sidebarButtons = Arrays.asList(headphonesButton);
@@ -774,6 +775,10 @@ public class PlayerController extends Application {
                             System.out.println("[PlayTrack][UI] Creating Media from local URL...");
 
                             vlcPlayer.media().play(tempFile.getAbsolutePath());
+                            System.out.println("🎵 [VLC PLAY] Playing LOCAL file: " + tempFile.getAbsolutePath());
+
+                            System.out.println("📊 [VLC STATE] isPlaying = " + vlcPlayer.status().isPlaying());
+                            System.out.println("📊 [VLC STATE] duration = " + vlcPlayer.status().length());
 
                             if (!vlcHandlersAttached) {
                                 attachVlcHandlers(
@@ -811,6 +816,7 @@ public class PlayerController extends Application {
         System.out.println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 
         vlcPlayer.media().play(safeUrl);
+        System.out.println("🌐 [VLC STREAM] Playing URL: " + safeUrl);
 
         if (!vlcHandlersAttached) {
             attachVlcHandlers(
@@ -846,6 +852,7 @@ public class PlayerController extends Application {
 
             @Override
             public void playing(MediaPlayer mediaPlayer) {
+                System.out.println("▶️ [VLC EVENT] PLAYING");
                 Platform.runLater(() -> {
                     FontIcon bigIcon = controlsUtil.getBigPlayIcon(controlsWrapper);
                     if (bigIcon != null) {
@@ -856,6 +863,7 @@ public class PlayerController extends Application {
 
             @Override
             public void paused(MediaPlayer mediaPlayer) {
+                System.out.println("⏸️ [VLC EVENT] PAUSED");
                 Platform.runLater(() -> {
                     FontIcon bigIcon = controlsUtil.getBigPlayIcon(controlsWrapper);
                     if (bigIcon != null) {
@@ -866,6 +874,7 @@ public class PlayerController extends Application {
 
             @Override
             public void stopped(MediaPlayer mediaPlayer) {
+                System.out.println("⏹️ [VLC EVENT] STOPPED");
                 Platform.runLater(() -> {
                     FontIcon bigIcon = controlsUtil.getBigPlayIcon(controlsWrapper);
                     if (bigIcon != null) {
@@ -876,6 +885,7 @@ public class PlayerController extends Application {
 
             @Override
             public void timeChanged(MediaPlayer mediaPlayer, long newTime) {
+                System.out.println("⏹️ [VLC EVENT] TIME CHANGED");
                 Platform.runLater(() -> {
                     long duration = mediaPlayer.status().length();
 
@@ -891,6 +901,7 @@ public class PlayerController extends Application {
 
             @Override
             public void finished(MediaPlayer mediaPlayer) {
+                System.out.println("⏹️ [VLC EVENT] FINISHED");
                 Platform.runLater(() -> {
                     try {
                         playNextTrack(
