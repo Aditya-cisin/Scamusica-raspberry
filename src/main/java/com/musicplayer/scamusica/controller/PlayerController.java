@@ -17,10 +17,10 @@ import javafx.scene.control.*;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.*;
+import uk.co.caprica.vlcj.player.base.MediaPlayerEventAdapter;
 import javafx.stage.Stage;
 import org.kordamp.ikonli.javafx.FontIcon;
 import uk.co.caprica.vlcj.player.base.MediaPlayer;
-import uk.co.caprica.vlcj.player.base.MediaPlayerEventAdapter;
 import uk.co.caprica.vlcj.player.component.AudioPlayerComponent;
 
 import javax.crypto.CipherInputStream;
@@ -32,9 +32,7 @@ import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.text.Normalizer;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
@@ -50,6 +48,8 @@ public class PlayerController extends Application {
     private final PlayerDropdown dropdownUtil = new PlayerDropdown();
     private final PlayerControls controlsUtil = new PlayerControls();
     private final PlayerAlbum albumUtil = new PlayerAlbum();
+
+    private boolean userPaused = false;
 
     private VBox playlistDropdownCard;
     private HBox playlistPill;
@@ -84,7 +84,6 @@ public class PlayerController extends Application {
 
         vlcPlayerComponent = new AudioPlayerComponent();
         vlcPlayer = vlcPlayerComponent.mediaPlayer();
-        System.out.println("🔥 [VLC INIT] Player created: " + vlcPlayer);
 
         Button headphonesButton = sidebarUtil.createIconButton("fas-headphones");
         List<Button> sidebarButtons = Arrays.asList(headphonesButton);
@@ -102,13 +101,25 @@ public class PlayerController extends Application {
         BorderPane header = headerUtil.createHeader(leftMeta, logoView, rightMeta);
 
         Label albumHeading = albumUtil.createAlbumHeading();
+
+        // New Code
+
+        Label currentStyleLabel = new Label();
+        currentStyleLabel.textProperty().bind(
+                LanguageManager.createStringBinding("label.currentStyle")
+        );
+//        currentStyleLabel.setText("Current Style");
+        currentStyleLabel.getStyleClass().add("section-heading-styles");
+
+        // New Code
+
         ImageView img = albumUtil.createAlbumImage(getClass());
         albumImageView = img;
         albumUtil.applyClip(img);
         HBox songsBox = albumUtil.createSongsBox();
 
         VBox leftAlbumVBox = albumUtil.createLeftAlbumVBox(albumHeading, img, songsBox);
-
+        leftAlbumVBox.getChildren().add(0, currentStyleLabel);
         recomputeGlobalCountAndUpdateUI();
 
         List<String> tempList;
@@ -141,8 +152,17 @@ public class PlayerController extends Application {
                 dropdownUtil.createDropdownCard(playlistViewItems, playlistCurrent, playlistMaster, playlistPill);
         HBox playlistHeaderBox = dropdownUtil.createPlaylistHeaderBox(playlistPill);
 
+        // New Code
+        Label sequencesLabel = new Label();
+        sequencesLabel.textProperty().bind(
+                LanguageManager.createStringBinding("label.sequencesTitle")
+        );
+        sequencesLabel.getStyleClass().add("section-heading-sequences");
+
+        // New Code
+
         VBox rightColumn = new VBox(8);
-        rightColumn.getChildren().addAll(playlistHeaderBox);
+        rightColumn.getChildren().addAll(sequencesLabel, playlistHeaderBox);
         HBox rightWrapper = new HBox(rightColumn);
         rightWrapper.setAlignment(Pos.TOP_RIGHT);
 
@@ -493,11 +513,7 @@ public class PlayerController extends Application {
                 }
             }
 
-            if (needDownload) {
-                setGenreSwitchEnabled(false);
-            } else {
-                setGenreSwitchEnabled(true);
-            }
+            setGenreSwitchEnabled(true);
 
             if (!downloadSeq.isEmpty()) {
                 downloadManager = new DownloadManager(downloadSeq, genreFolderPath,
@@ -505,7 +521,6 @@ public class PlayerController extends Application {
                             @Override
                             public void onDownloadStarted(int songId, File outputFile) {
                                 currentFileProgressFraction = 0.0;
-                                setGenreSwitchEnabled(false);
 
                                 updatePlayButtonState(controlsWrapper);
 
@@ -550,7 +565,7 @@ public class PlayerController extends Application {
                                     updatePlayButtonState(controlsWrapper);
 
                                     if (newGenreCount >= 2) {
-                                        if (!vlcPlayer.status().isPlaying()) {
+                                        if (!vlcPlayer.status().isPlaying() && !userPaused) {
                                             try {
                                                 System.out.println("[AutoPlay] 2 songs downloaded. Starting playback." +
                                                         "..");
@@ -660,16 +675,27 @@ public class PlayerController extends Application {
             if (percent > 100.0) percent = 100.0;
         }
 
-        final String text = String.format("%.0f%% %s (%d/%d)", percent, LanguageManager.createStringBinding("label" +
-                        ".download").get(),
+        final String text = String.format("%.0f%% %s (%d/%d)", percent,
+                LanguageManager.createStringBinding("label" + ".download").get(),
                 currentGenreDownloadedCount.get(), currentGenreTotalFiles);
+
+        boolean isDone = (
+                currentGenreDownloadedCount.get() == currentGenreTotalFiles
+                        && currentGenreTotalFiles > 0
+        );
 
         Platform.runLater(() -> {
             try {
                 downloadLabel.textProperty().unbind();
-            } catch (Exception ignored) {
-            }
+            } catch (Exception ignored) {}
+
             downloadLabel.setText(text);
+
+            if (isDone) {
+                downloadLabel.setStyle("-fx-text-fill: #22c55e;"); // GREEN
+            } else {
+                downloadLabel.setStyle("-fx-text-fill: #ef4444;"); // RED
+            }
         });
     }
 
@@ -775,10 +801,6 @@ public class PlayerController extends Application {
                             System.out.println("[PlayTrack][UI] Creating Media from local URL...");
 
                             vlcPlayer.media().play(tempFile.getAbsolutePath());
-                            System.out.println("🎵 [VLC PLAY] Playing LOCAL file: " + tempFile.getAbsolutePath());
-
-                            System.out.println("📊 [VLC STATE] isPlaying = " + vlcPlayer.status().isPlaying());
-                            System.out.println("📊 [VLC STATE] duration = " + vlcPlayer.status().length());
 
                             if (!vlcHandlersAttached) {
                                 attachVlcHandlers(
@@ -816,7 +838,6 @@ public class PlayerController extends Application {
         System.out.println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 
         vlcPlayer.media().play(safeUrl);
-        System.out.println("🌐 [VLC STREAM] Playing URL: " + safeUrl);
 
         if (!vlcHandlersAttached) {
             attachVlcHandlers(
@@ -852,7 +873,6 @@ public class PlayerController extends Application {
 
             @Override
             public void playing(MediaPlayer mediaPlayer) {
-                System.out.println("▶️ [VLC EVENT] PLAYING");
                 Platform.runLater(() -> {
                     FontIcon bigIcon = controlsUtil.getBigPlayIcon(controlsWrapper);
                     if (bigIcon != null) {
@@ -863,7 +883,6 @@ public class PlayerController extends Application {
 
             @Override
             public void paused(MediaPlayer mediaPlayer) {
-                System.out.println("⏸️ [VLC EVENT] PAUSED");
                 Platform.runLater(() -> {
                     FontIcon bigIcon = controlsUtil.getBigPlayIcon(controlsWrapper);
                     if (bigIcon != null) {
@@ -874,7 +893,6 @@ public class PlayerController extends Application {
 
             @Override
             public void stopped(MediaPlayer mediaPlayer) {
-                System.out.println("⏹️ [VLC EVENT] STOPPED");
                 Platform.runLater(() -> {
                     FontIcon bigIcon = controlsUtil.getBigPlayIcon(controlsWrapper);
                     if (bigIcon != null) {
@@ -885,7 +903,6 @@ public class PlayerController extends Application {
 
             @Override
             public void timeChanged(MediaPlayer mediaPlayer, long newTime) {
-                System.out.println("⏹️ [VLC EVENT] TIME CHANGED");
                 Platform.runLater(() -> {
                     long duration = mediaPlayer.status().length();
 
@@ -901,7 +918,6 @@ public class PlayerController extends Application {
 
             @Override
             public void finished(MediaPlayer mediaPlayer) {
-                System.out.println("⏹️ [VLC EVENT] FINISHED");
                 Platform.runLater(() -> {
                     try {
                         playNextTrack(
@@ -934,10 +950,10 @@ public class PlayerController extends Application {
         currentTrackIndex++;
 
         if (currentTrackIndex >= playQueue.size()) {
-            System.out.println("[PlayerController] All tracks finished. Stopping playback.");
-            currentTrackIndex = playQueue.size();
-            stopPlayback(progressSlider, leftTime, rightTime, controlsWrapper, downloadLabel);
-            return;
+            System.out.println("[PlayerController] All tracks finished. Reshuffling and looping...");
+
+            Collections.shuffle(playQueue, new Random(System.nanoTime()));
+            currentTrackIndex = 0;
         }
 
         playTrack(
@@ -1001,22 +1017,13 @@ public class PlayerController extends Application {
                 return;
             }
 
-//            MediaPlayer.Status status = mediaPlayer.getStatus();
-//            if (status == MediaPlayer.Status.PLAYING) {
-//                mediaPlayer.pause();
-//                bigIcon.setIconLiteral("fas-play");
-//                bigIcon.setIconColor(javafx.scene.paint.Color.WHITE);
-//            } else {
-//                mediaPlayer.play();
-//                bigIcon.setIconLiteral("fas-pause");
-//                bigIcon.setIconColor(javafx.scene.paint.Color.WHITE);
-//            }
-
             if (vlcPlayer.status().isPlaying()) {
                 vlcPlayer.controls().pause();
+                userPaused = true;
                 bigIcon.setIconLiteral("fas-play");
             } else {
                 vlcPlayer.controls().play();
+                userPaused = false;
                 bigIcon.setIconLiteral("fas-pause");
             }
         });
