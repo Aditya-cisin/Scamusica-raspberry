@@ -4,6 +4,8 @@ import com.google.gson.*;
 import com.musicplayer.scamusica.manager.SessionManager;
 import com.musicplayer.scamusica.model.PlaylistTrack;
 import com.musicplayer.scamusica.util.ApiClient;
+import com.musicplayer.scamusica.util.AppLogger;
+import com.musicplayer.scamusica.util.OfflineCache;
 import com.musicplayer.scamusica.util.Utility;
 
 import java.util.*;
@@ -16,9 +18,12 @@ public class PlaylistApiService {
     private JsonObject fetchRootJson() throws Exception {
         String token = SessionManager.loadToken();
 
-        if (token == null) {
+        if (token == null || token.trim().isEmpty()) {
+            System.err.println("[PlaylistApiService] Token is null or empty");
             throw new IllegalStateException("Bearer token is missing");
         }
+
+        System.out.println("[PlaylistApiService] Using token: " + token);
 
         Map<String, String> headers = new HashMap<>();
         headers.put("Authorization", "Bearer " + token);
@@ -34,192 +39,231 @@ public class PlaylistApiService {
         return JsonParser.parseString(response).getAsJsonObject();
     }
 
+    // ════════════════════════════════════════════════════════════════════════
+    // CHANGE 1 — fetchPlaylistTitles: success pe cache save, fail pe cache load
+    // ════════════════════════════════════════════════════════════════════════
     public List<String> fetchPlaylistTitles() throws Exception {
-        JsonObject root = fetchRootJson();
-        List<String> titles = new ArrayList<>();
+        try {
+            JsonObject root = fetchRootJson();
+            List<String> titles = new ArrayList<>();
 
-        if (!root.has("data") || root.get("data").isJsonNull() || !root.get("data").isJsonObject()) {
-            return titles;
-        }
+            if (!root.has("data") || root.get("data").isJsonNull() || !root.get("data").isJsonObject()) {
+                return titles;
+            }
 
-        JsonObject dataObj = root.getAsJsonObject("data");
+            JsonObject dataObj = root.getAsJsonObject("data");
 
-        if (!dataObj.has("sequences") || !dataObj.get("sequences").isJsonArray()) {
-            return titles;
-        }
+            if (!dataObj.has("sequences") || !dataObj.get("sequences").isJsonArray()) {
+                return titles;
+            }
 
-        JsonArray sequences = dataObj.getAsJsonArray("sequences");
+            JsonArray sequences = dataObj.getAsJsonArray("sequences");
 
-        for (JsonElement seqEl : sequences) {
-            if (!seqEl.isJsonObject()) continue;
-
-            JsonObject seqObj = seqEl.getAsJsonObject();
-
-            if (seqObj.has("title") && !seqObj.get("title").isJsonNull()) {
-                String seqTitle = seqObj.get("title").getAsString();
-                if (seqTitle != null && !seqTitle.trim().isEmpty()) {
-                    titles.add(seqTitle);
+            for (JsonElement seqEl : sequences) {
+                if (!seqEl.isJsonObject()) continue;
+                JsonObject seqObj = seqEl.getAsJsonObject();
+                if (seqObj.has("title") && !seqObj.get("title").isJsonNull()) {
+                    String seqTitle = seqObj.get("title").getAsString();
+                    if (seqTitle != null && !seqTitle.trim().isEmpty()) {
+                        titles.add(seqTitle);
+                    }
                 }
             }
-        }
 
-        System.out.println("[PlaylistApiService] Playlists from API: " + titles);
-        return titles;
+            System.out.println("[PlaylistApiService] Playlists from API: " + titles);
+
+            // ✅ SUCCESS — cache mein save karo
+            if (!titles.isEmpty()) {
+                OfflineCache.savePlaylistTitles(titles);
+            }
+
+            return titles;
+
+        } catch (Exception e) {
+            // ❌ FAIL — cache se load karo
+            AppLogger.log("[PlaylistApiService] fetchPlaylistTitles failed, loading from cache: " + e.getMessage());
+            List<String> cached = OfflineCache.loadPlaylistTitles();
+            if (!cached.isEmpty()) {
+                AppLogger.log("[PlaylistApiService] Using cached titles: " + cached.size());
+                return cached;
+            }
+            throw e; // cache bhi nahi hai toh exception do
+        }
     }
 
+    // ════════════════════════════════════════════════════════════════════════
+    // CHANGE 2 — fetchTracksForGenre: success pe cache save, fail pe cache load
+    // ════════════════════════════════════════════════════════════════════════
     public List<PlaylistTrack> fetchTracksForGenre(String genreTitle) throws Exception {
-        List<PlaylistTrack> result = new ArrayList<>();
+        try {
+            List<PlaylistTrack> result = new ArrayList<>();
 
-        JsonObject root = fetchRootJson();
+            JsonObject root = fetchRootJson();
 
-        if (!root.has("data") || root.get("data").isJsonNull() || !root.get("data").isJsonObject()) {
-            System.out.println("[PlaylistApiService] 'data' field missing or not object in response");
-            return result;
-        }
-
-        JsonObject dataObj = root.getAsJsonObject("data");
-
-        if (!dataObj.has("sequences") || !dataObj.get("sequences").isJsonArray()) {
-            System.out.println("[PlaylistApiService] 'sequences' missing or not array");
-            return result;
-        }
-
-        JsonArray sequences = dataObj.getAsJsonArray("sequences");
-
-        String commonPath = null;
-        if (root.has("filePath") && !root.get("filePath").isJsonNull()) {
-            commonPath = root.get("filePath").getAsString();
-        }
-
-        for (JsonElement seqEl : sequences) {
-            if (!seqEl.isJsonObject()) continue;
-
-            JsonObject seqObj = seqEl.getAsJsonObject();
-
-            if (!seqObj.has("title") || seqObj.get("title").isJsonNull()) continue;
-            String seqTitle = seqObj.get("title").getAsString();
-            if (!genreTitle.equals(seqTitle)) continue;
-
-            if (!seqObj.has("styles") || !seqObj.get("styles").isJsonArray()) continue;
-
-            JsonArray styles = seqObj.getAsJsonArray("styles");
-
-            for (JsonElement styleEl : styles) {
-                if (!styleEl.isJsonObject()) continue;
-
-                JsonObject styleObj = styleEl.getAsJsonObject();
-
-                String folderTitle = null;
-                if (styleObj.has("title") && !styleObj.get("title").isJsonNull()) {
-                    folderTitle = styleObj.get("title").getAsString();
-                }
-
-                if (!styleObj.has("songs") || !styleObj.get("songs").isJsonArray()) continue;
-
-                JsonArray songsArr = styleObj.getAsJsonArray("songs");
-
-                List<PlaylistTrack> folderTracks = new ArrayList<>();
-
-                for (JsonElement songEl : songsArr) {
-                    if (!songEl.isJsonObject()) continue;
-
-                    JsonObject songObj = songEl.getAsJsonObject();
-
-                    PlaylistTrack track = parseSongToTrack(songObj, commonPath, folderTitle);
-                    if (track != null) {
-                        folderTracks.add(track);
-                    }
-                }
-
-                Collections.shuffle(folderTracks);
-
-                result.addAll(folderTracks);
+            if (!root.has("data") || root.get("data").isJsonNull() || !root.get("data").isJsonObject()) {
+                System.out.println("[PlaylistApiService] 'data' field missing or not object in response");
+                return result;
             }
 
-            break;
-        }
+            JsonObject dataObj = root.getAsJsonObject("data");
 
-        System.out.println("[PlaylistApiService] Final Tracks with folder titles → " + result);
-        return result;
+            if (!dataObj.has("sequences") || !dataObj.get("sequences").isJsonArray()) {
+                System.out.println("[PlaylistApiService] 'sequences' missing or not array");
+                return result;
+            }
+
+            JsonArray sequences = dataObj.getAsJsonArray("sequences");
+
+            String commonPath = null;
+            if (root.has("filePath") && !root.get("filePath").isJsonNull()) {
+                commonPath = root.get("filePath").getAsString();
+            }
+
+            for (JsonElement seqEl : sequences) {
+                if (!seqEl.isJsonObject()) continue;
+                JsonObject seqObj = seqEl.getAsJsonObject();
+
+                if (!seqObj.has("title") || seqObj.get("title").isJsonNull()) continue;
+                String seqTitle = seqObj.get("title").getAsString();
+                if (!genreTitle.equals(seqTitle)) continue;
+
+                if (!seqObj.has("styles") || !seqObj.get("styles").isJsonArray()) continue;
+                JsonArray styles = seqObj.getAsJsonArray("styles");
+
+                for (JsonElement styleEl : styles) {
+                    if (!styleEl.isJsonObject()) continue;
+                    JsonObject styleObj = styleEl.getAsJsonObject();
+
+                    String folderTitle = null;
+                    if (styleObj.has("title") && !styleObj.get("title").isJsonNull()) {
+                        folderTitle = styleObj.get("title").getAsString();
+                    }
+
+                    if (!styleObj.has("songs") || !styleObj.get("songs").isJsonArray()) continue;
+                    JsonArray songsArr = styleObj.getAsJsonArray("songs");
+
+                    List<PlaylistTrack> folderTracks = new ArrayList<>();
+                    for (JsonElement songEl : songsArr) {
+                        if (!songEl.isJsonObject()) continue;
+                        PlaylistTrack track = parseSongToTrack(songEl.getAsJsonObject(), commonPath, folderTitle);
+                        if (track != null) {
+                            folderTracks.add(track);
+                        }
+                    }
+
+                    Collections.shuffle(folderTracks);
+                    result.addAll(folderTracks);
+                }
+                break;
+            }
+
+            System.out.println("[PlaylistApiService] Final Tracks with folder titles → " + result);
+
+            // ✅ SUCCESS — cache mein save karo
+            if (!result.isEmpty()) {
+                OfflineCache.saveTracks(genreTitle, result);
+            }
+
+            return result;
+
+        } catch (Exception e) {
+            // ❌ FAIL — cache se load karo
+            AppLogger.log("[PlaylistApiService] fetchTracksForGenre failed, loading from cache: " + e.getMessage());
+            List<PlaylistTrack> cached = OfflineCache.loadTracks(genreTitle);
+            if (!cached.isEmpty()) {
+                AppLogger.log("[PlaylistApiService] Using cached tracks for: " + genreTitle);
+                return cached;
+            }
+            return new ArrayList<>(); // empty return karo, crash mat karo
+        }
     }
 
+    // ════════════════════════════════════════════════════════════════════════
+    // CHANGE 3 — fetchDownloadSequenceForGenre: success pe cache save, fail pe cache load
+    // ════════════════════════════════════════════════════════════════════════
     public List<Integer> fetchDownloadSequenceForGenre(String genreTitle) throws Exception {
-        List<Integer> downloadSequence = new ArrayList<>();
+        try {
+            List<Integer> downloadSequence = new ArrayList<>();
 
-        JsonObject root = fetchRootJson();
+            JsonObject root = fetchRootJson();
 
-        if (!root.has("data") || root.get("data").isJsonNull() || !root.get("data").isJsonObject()) {
-            System.out.println("[PlaylistApiService] 'data' field missing or not object in response");
-            return downloadSequence;
-        }
-
-        JsonObject dataObj = root.getAsJsonObject("data");
-
-        if (!dataObj.has("sequences") || !dataObj.get("sequences").isJsonArray()) {
-            System.out.println("[PlaylistApiService] 'sequences' missing or not array");
-            return downloadSequence;
-        }
-
-        JsonArray sequences = dataObj.getAsJsonArray("sequences");
-
-        String commonPath = null;
-        if (root.has("filePath") && !root.get("filePath").isJsonNull()) {
-            commonPath = root.get("filePath").getAsString();
-        }
-
-        Set<Integer> seenIds = new HashSet<>();
-
-        for (JsonElement seqEl : sequences) {
-            if (!seqEl.isJsonObject()) continue;
-
-            JsonObject seqObj = seqEl.getAsJsonObject();
-
-            if (!seqObj.has("title") || seqObj.get("title").isJsonNull()) continue;
-            String seqTitle = seqObj.get("title").getAsString();
-            if (!genreTitle.equals(seqTitle)) continue;
-
-            if (!seqObj.has("styles") || !seqObj.get("styles").isJsonArray()) continue;
-
-            JsonArray styles = seqObj.getAsJsonArray("styles");
-
-            for (JsonElement styleEl : styles) {
-                if (!styleEl.isJsonObject()) continue;
-
-                JsonObject styleObj = styleEl.getAsJsonObject();
-
-                if (!styleObj.has("songs") || !styleObj.get("songs").isJsonArray()) continue;
-
-                JsonArray songsArr = styleObj.getAsJsonArray("songs");
-
-                List<PlaylistTrack> tracks = new ArrayList<>();
-
-                for (JsonElement songEl : songsArr) {
-                    if (!songEl.isJsonObject()) continue;
-
-                    JsonObject songObj = songEl.getAsJsonObject();
-
-                    PlaylistTrack track = parseSongToTrack(songObj, commonPath, null);
-                    if (track != null && track.getId() != null && seenIds.add(track.getId())) {
-                        tracks.add(track);
-                    }
-                }
-
-                Collections.shuffle(tracks);
-
-                for (PlaylistTrack t : tracks) {
-                    if (t.getId() != null) {
-                        downloadSequence.add(t.getId());
-                    }
-                }
+            if (!root.has("data") || root.get("data").isJsonNull() || !root.get("data").isJsonObject()) {
+                return downloadSequence;
             }
 
-            break;
-        }
+            JsonObject dataObj = root.getAsJsonObject("data");
 
-        System.out.println("[PlaylistApiService] Flattened download sequence for genre '" + genreTitle + "': " + downloadSequence);
-        return downloadSequence;
+            if (!dataObj.has("sequences") || !dataObj.get("sequences").isJsonArray()) {
+                return downloadSequence;
+            }
+
+            JsonArray sequences = dataObj.getAsJsonArray("sequences");
+
+            String commonPath = null;
+            if (root.has("filePath") && !root.get("filePath").isJsonNull()) {
+                commonPath = root.get("filePath").getAsString();
+            }
+
+            Set<Integer> seenIds = new HashSet<>();
+
+            for (JsonElement seqEl : sequences) {
+                if (!seqEl.isJsonObject()) continue;
+                JsonObject seqObj = seqEl.getAsJsonObject();
+
+                if (!seqObj.has("title") || seqObj.get("title").isJsonNull()) continue;
+                String seqTitle = seqObj.get("title").getAsString();
+                if (!genreTitle.equals(seqTitle)) continue;
+
+                if (!seqObj.has("styles") || !seqObj.get("styles").isJsonArray()) continue;
+                JsonArray styles = seqObj.getAsJsonArray("styles");
+
+                for (JsonElement styleEl : styles) {
+                    if (!styleEl.isJsonObject()) continue;
+                    JsonObject styleObj = styleEl.getAsJsonObject();
+
+                    if (!styleObj.has("songs") || !styleObj.get("songs").isJsonArray()) continue;
+                    JsonArray songsArr = styleObj.getAsJsonArray("songs");
+
+                    List<PlaylistTrack> tracks = new ArrayList<>();
+                    for (JsonElement songEl : songsArr) {
+                        if (!songEl.isJsonObject()) continue;
+                        PlaylistTrack track = parseSongToTrack(songEl.getAsJsonObject(), commonPath, null);
+                        if (track != null && track.getId() != null && seenIds.add(track.getId())) {
+                            tracks.add(track);
+                        }
+                    }
+
+                    Collections.shuffle(tracks);
+                    for (PlaylistTrack t : tracks) {
+                        if (t.getId() != null) {
+                            downloadSequence.add(t.getId());
+                        }
+                    }
+                }
+                break;
+            }
+
+            System.out.println("[PlaylistApiService] Download sequence for '" + genreTitle + "': " + downloadSequence);
+
+            //  SUCCESS — cache mein save karo
+            if (!downloadSequence.isEmpty()) {
+                OfflineCache.saveDownloadSequence(genreTitle, downloadSequence);
+            }
+
+            return downloadSequence;
+
+        } catch (Exception e) {
+            // ❌ FAIL — cache se load karo
+            AppLogger.log("[PlaylistApiService] fetchDownloadSequence failed, loading from cache: " + e.getMessage());
+            List<Integer> cached = OfflineCache.loadDownloadSequence(genreTitle);
+            AppLogger.log("[PlaylistApiService] Using cached sequence: " + cached.size() + " items");
+            return cached; // empty bhi theek hai
+        }
     }
 
+    // ════════════════════════════════════════════════════════════════════════
+    // parseSongToTrack — BILKUL SAME, kuch nahi badla
+    // ════════════════════════════════════════════════════════════════════════
     private PlaylistTrack parseSongToTrack(JsonObject songObj,
                                            String commonPath,
                                            String folderTitle) {
@@ -236,13 +280,9 @@ public class PlaylistApiService {
             }
         }
 
-        //        String title = (songObj.has("title") && !songObj.get("title").isJsonNull())
-//                ? songObj.get("title").getAsString()
-//                : "Unknown Title";
         String title;
         if (songObj.has("file") && !songObj.get("file").isJsonNull()) {
             String fileName = songObj.get("file").getAsString();
-            // Remove .mp3 extension
             title = fileName.endsWith(".mp3")
                     ? fileName.substring(0, fileName.length() - 4)
                     : fileName;

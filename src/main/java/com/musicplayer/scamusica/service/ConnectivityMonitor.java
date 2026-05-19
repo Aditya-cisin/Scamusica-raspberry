@@ -52,7 +52,7 @@ public class ConnectivityMonitor {
 
             int code = con.getResponseCode();
             return (code >= 200 && code < 500)
-                    ? Status.ONLINE
+                    ?Status.ONLINE
                     : Status.OFFLINE;
 
         } catch (Exception e) {
