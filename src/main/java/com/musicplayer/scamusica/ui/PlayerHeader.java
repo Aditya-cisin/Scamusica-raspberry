@@ -7,15 +7,13 @@ package com.musicplayer.scamusica.ui;
 
 import com.musicplayer.scamusica.manager.LanguageManager;
 import com.musicplayer.scamusica.manager.SessionManager;
+import com.musicplayer.scamusica.service.NetworkMonitor;
 import javafx.beans.binding.Bindings;
-import javafx.scene.control.Button;
 import javafx.scene.control.Label;
+import javafx.scene.control.Button;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
-import javafx.scene.layout.BorderPane;
-import javafx.scene.layout.HBox;
-import javafx.scene.layout.VBox;
-import javafx.scene.shape.Circle;
+import javafx.scene.layout.*;
 import javafx.scene.text.Font;
 
 public class PlayerHeader {
@@ -66,11 +64,46 @@ public class PlayerHeader {
      *
      * @return HBox containing the right-aligned online status indicator
      */
+//    public HBox createRightMeta() {
+//        Label onlineLbl = new Label();
+//        onlineLbl.textProperty().bind(LanguageManager.createStringBinding("label.online"));
+//        onlineLbl.setStyle("-fx-color: #000000;" + "-fx-font-size: 14px;");
+//        HBox rightMeta = new HBox(8, new javafx.scene.shape.Circle(8, javafx.scene.paint.Color.web("#248924")), onlineLbl);
+//        rightMeta.setAlignment(javafx.geometry.Pos.CENTER_RIGHT);
+//        return rightMeta;
+//    }
+
     public HBox createRightMeta() {
+        javafx.scene.shape.Circle statusCircle =
+                new javafx.scene.shape.Circle(8, javafx.scene.paint.Color.web("#ef4444"));
+
         Label onlineLbl = new Label();
-        onlineLbl.textProperty().bind(LanguageManager.createStringBinding("label.online"));
-        onlineLbl.setStyle("-fx-color: #000000;" + "-fx-font-size: 14px;");
-        HBox rightMeta = new HBox(8, new javafx.scene.shape.Circle(8, javafx.scene.paint.Color.web("#248924")), onlineLbl);
+        onlineLbl.setStyle("-fx-color: #000000; -fx-font-size: 14px;");
+
+        NetworkMonitor monitor = NetworkMonitor.getInstance();
+
+        // ✅ Circle + Label dono update karne ka ek Runnable
+        Runnable updateUI = () -> {
+            boolean isOnline = monitor.isOnline();
+            statusCircle.setFill(
+                    isOnline
+                            ? javafx.scene.paint.Color.web("#248924")  // green
+                            : javafx.scene.paint.Color.web("#ef4444")  // red
+            );
+            String key = isOnline ? "label.online" : "label.offline";
+            onlineLbl.textProperty().bind(LanguageManager.createStringBinding(key));
+        };
+
+        // ✅ Listener — jab bhi change ho
+        monitor.onlineProperty().addListener((obs, old, now) ->
+                javafx.application.Platform.runLater(updateUI)
+        );
+
+        // ✅ Initial state — monitor start hone ke baad check karo
+        // Platform.runLater se guarantee hoga ki monitor.start() ho chuka hai
+        javafx.application.Platform.runLater(updateUI);
+
+        HBox rightMeta = new HBox(8, statusCircle, onlineLbl);
         rightMeta.setAlignment(javafx.geometry.Pos.CENTER_RIGHT);
         return rightMeta;
     }
