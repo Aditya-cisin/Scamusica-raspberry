@@ -2,6 +2,7 @@ package com.musicplayer.scamusica.service;
 
 import com.google.gson.*;
 import com.musicplayer.scamusica.manager.SessionManager;
+import com.musicplayer.scamusica.model.Ad;
 import com.musicplayer.scamusica.model.PlaylistTrack;
 import com.musicplayer.scamusica.util.ApiClient;
 import com.musicplayer.scamusica.util.AppLogger;
@@ -342,5 +343,79 @@ public class PlaylistApiService {
         }
 
         return new PlaylistTrack(songId, title, fullUrl, durationSeconds, folderTitle, fullAlbumImgUrl);
+    }
+
+
+    public List<Ad> fetchAds() throws Exception {
+        try {
+            JsonObject root = fetchRootJson();
+            List<Ad> ads = new ArrayList<>();
+            if (!root.has("data") || !root.get("data").isJsonObject()) {
+                return ads;
+            }
+
+            JsonObject dataObj = root.getAsJsonObject("data");
+
+            if (!dataObj.has("ads") || !dataObj.get("ads").isJsonArray()) {
+                return ads;
+            }
+
+            JsonArray adsArray = dataObj.getAsJsonArray("ads");
+
+            for (JsonElement adEl : adsArray) {
+                if (!adEl.isJsonObject()) continue;
+                JsonObject adObj = adEl.getAsJsonObject();
+
+                Ad ad = new Ad();
+                ad.setId(adObj.has("id") ? adObj.get("id").getAsInt() : null);
+                ad.setCampaignName(adObj.has("campaign_name") ? adObj.get("campaign_name").getAsString() : "Unknown");
+                ad.setAudioFile(adObj.has("audio_file") ? adObj.get("audio_file").getAsString() : null);
+                ad.setAudioSource(adObj.has("audio_source") ? adObj.get("audio_source").getAsString() : null);
+                ad.setScheduleType(adObj.has("schedule_type") ? adObj.get("schedule_type").getAsString() : null);
+                ad.setStartDate(adObj.has("start_date") ? adObj.get("start_date").getAsString() : null);
+                ad.setEndDate(adObj.has("end_date") ? adObj.get("end_date").getAsString() : null);
+                ad.setStatus(adObj.has("status") ? adObj.get("status").getAsString() : "inactive");
+
+                // Handle playTimes (can be array or number)
+                if (adObj.has("play_times")) {
+                    JsonElement ptEl = adObj.get("play_times");
+                    if (ptEl.isJsonArray()) {
+                        // Custom schedule
+                        List<String> times = new ArrayList<>();
+                        for (JsonElement t : ptEl.getAsJsonArray()) {
+                            times.add(t.getAsString());
+                        }
+                        ad.setPlayTimes(times);
+                    } else if (ptEl.isJsonPrimitive()) {
+                        // Interval schedule
+                        ad.setPlayTimes(ptEl.getAsInt());
+                    }
+                }
+
+                // Handle activeDays
+                if (adObj.has("active_days") && adObj.get("active_days").isJsonArray()) {
+                    List<String> days = new ArrayList<>();
+                    for (JsonElement day : adObj.getAsJsonArray("active_days")) {
+                        days.add(day.getAsString());
+                    }
+                    ad.setActiveDays(days);
+                }
+
+                ads.add(ad);
+            }
+
+            System.out.println("[PlaylistApiService] Fetched " + ads.size() + " ads");
+
+            // Cache ads if needed
+            // OfflineCache.saveAds(ads);
+
+            return ads;
+
+        } catch (Exception e) {
+            AppLogger.log("[PlaylistApiService] fetchAds failed: " + e.getMessage());
+            // Try cache if available
+            // List<Ad> cached = OfflineCache.loadAds();
+            return new ArrayList<>();
+        }
     }
 }
