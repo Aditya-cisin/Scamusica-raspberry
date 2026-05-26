@@ -246,8 +246,10 @@ public class DownloadManager {
                 AppLogger.log("[DOWNLOAD][DONE] " + id);
                 if (listener != null) listener.onDownloadCompleted(id, outFile);
             } else {
-                AppLogger.log("[DOWNLOAD][FAIL] " + id);
-                if (listener != null) listener.onDownloadFailed(id, new RuntimeException("Download failed"));
+                // Incomplete file delete karo
+                if (outFile.exists()) outFile.delete();
+                AppLogger.log("[DOWNLOAD][FAIL] Incomplete file deleted for id=" + id);
+                if (listener != null) listener.onDownloadFailed(id, new RuntimeException("Incomplete download, file too small"));
             }
 
             activeDownloads.remove(id);
