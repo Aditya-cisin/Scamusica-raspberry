@@ -1,9 +1,9 @@
 package com.musicplayer.scamusica.controller;
 
 import com.musicplayer.scamusica.manager.LanguageManager;
+import com.musicplayer.scamusica.model.Ad;
 import com.musicplayer.scamusica.model.PlaylistTrack;
-import com.musicplayer.scamusica.service.DownloadManager;
-import com.musicplayer.scamusica.service.PlaylistApiService;
+import com.musicplayer.scamusica.service.*;
 import com.musicplayer.scamusica.ui.*;
 
 import com.musicplayer.scamusica.util.AppLogger;
@@ -40,14 +40,22 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.prefs.Preferences;
 import java.util.stream.Collectors;
+
 import com.musicplayer.scamusica.util.OfflineCache;
 
 public class PlayerController extends Application {
+
+    private Label globalAlbumHeading;
+    private Label globalTitleLabel;
 
     private MediaPlayer vlcPlayer;
     private AudioPlayerComponent vlcPlayerComponent;
     private boolean vlcHandlersAttached = false;
     private boolean userPaused = false;
+
+    private MediaPlayerEventAdapter currentVlcListener = null;
+    private File currentTempFile = null;
+    private Thread queueWorkerThread = null;
 
     private final PlayerSidebar sidebarUtil = new PlayerSidebar();
     private final PlayerHeader headerUtil = new PlayerHeader();
@@ -91,10 +99,16 @@ public class PlayerController extends Application {
     private volatile boolean running = true;
     private List<Integer> lastServerIds = new ArrayList<>();
 
+    private AdScheduler adScheduler;
+    private AdPlayer adPlayer;
+    private List<Ad> allAds = new ArrayList<>();
+
     @Override
     public void start(Stage primaryStage) {
 
         AppLogger.init();
+        // === NETWORK MONITOR START ===
+        NetworkMonitor.getInstance().start();
         AppLogger.log("[APP] Player started");
 
         String appDir = System.getProperty("user.dir");
@@ -105,6 +119,8 @@ public class PlayerController extends Application {
 
         vlcPlayerComponent = new AudioPlayerComponent();
         vlcPlayer = vlcPlayerComponent.mediaPlayer();
+
+        initializeAdSystem();
 
         Button headphonesButton = sidebarUtil.createIconButton("fas-headphones");
         List<Button> sidebarButtons = Arrays.asList(headphonesButton);
@@ -122,8 +138,9 @@ public class PlayerController extends Application {
         BorderPane header = headerUtil.createHeader(leftMeta, logoView, rightMeta);
 
 
-        Label albumHeading = albumUtil.createAlbumHeading();
-
+//        Label albumHeading = albumUtil.createAlbumHeading();
+        globalAlbumHeading = albumUtil.createAlbumHeading();
+        Label albumHeading = globalAlbumHeading;
         // New Code
         Label currentStyleLabel = new Label();
         currentStyleLabel.textProperty().bind(
@@ -194,7 +211,9 @@ public class PlayerController extends Application {
         HBox rightWrapper = new HBox(rightColumn);
         rightWrapper.setAlignment(Pos.TOP_RIGHT);
 
-        Label titleCentered = headerUtil.createPlayerTitle();
+//        Label titleCentered = headerUtil.createPlayerTitle();
+        globalTitleLabel = headerUtil.createPlayerTitle();
+        Label titleCentered = globalTitleLabel;
         VBox centerContainer = headerUtil.createCenterContainer(titleCentered);
         HBox topRow = albumUtil.createTopRow(leftAlbumVBox, centerContainer, rightWrapper);
 
@@ -284,6 +303,11 @@ public class PlayerController extends Application {
 
             running = false;
 
+            // ✅ FIX: Queue worker ko interrupt karo
+            if (queueWorkerThread != null) {
+                queueWorkerThread.interrupt();
+            }
+
             if (schedular != null) {
                 schedular.shutdownNow();
             }
@@ -302,6 +326,15 @@ public class PlayerController extends Application {
                 }
             }
 
+            // ✅ ADD THESE 4 LINES - Cleanup ad system
+            if (adScheduler != null) {
+                adScheduler.stop();
+            }
+            if (adPlayer != null) {
+                adPlayer.stop();
+            }
+
+            NetworkMonitor.getInstance().stop();
             Platform.exit();
 
             System.exit(0);
@@ -389,16 +422,22 @@ public class PlayerController extends Application {
         });
 
         // 🔥 START QUEUE WORKER
-        new Thread(() -> {
+        queueWorkerThread = new Thread(() -> {
             while (running) {
                 try {
                     Runnable task = operationQueue.take();
                     task.run();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
             }
-        }).start();
+        });
+
+        queueWorkerThread.setDaemon(true);
+        queueWorkerThread.start();
 
 
         // 🔥 START SCHEDULER
@@ -499,8 +538,176 @@ public class PlayerController extends Application {
                 }
             }
 
+            try {
+                syncAdsFromServer();
+            } catch (Exception e) {
+                AppLogger.log("[SYNC] Ad sync failed: " + e.getMessage());
+            }
+
         } catch (Exception e) {
             e.printStackTrace();
+        }
+    }
+
+    private void initializeAdSystem() {
+        AppLogger.log("[PlayerController] Initializing Ad System");
+
+        // 1. Create AdPlayer with listeners
+        adPlayer = new AdPlayer(vlcPlayer, new AdPlayer.AdPlaybackListener() {
+            @Override
+            public void onAdPlaybackStarted(Ad ad) {
+
+                AppLogger.log("[AdPlayer] Ad started: "
+                        + ad.getCampaignName());
+
+                Platform.runLater(() -> {
+
+                    try {
+
+                        globalTitleLabel.setText("ADVERTISEMENT");
+
+                        globalAlbumHeading.setText(ad.getCampaignName());
+
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                });
+            }
+
+            @Override
+            public void onAdPlaybackFinished(Ad ad) {
+
+                AppLogger.log("[AdPlayer] Ad finished: "
+                        + ad.getCampaignName());
+
+                Platform.runLater(() -> {
+
+                    try {
+
+                        if (!playQueue.isEmpty()
+                                && currentTrackIndex < playQueue.size()) {
+
+                            PlaylistTrack track =
+                                    playQueue.get(currentTrackIndex);
+
+                            globalTitleLabel.setText(track.getTitle());
+
+                            globalAlbumHeading.setText(currentPlaylistName);
+                        }
+
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                });
+            }
+
+            @Override
+            public void onSongPaused(String reason) {
+                AppLogger.log("[AdPlayer] Song paused: " + reason);
+            }
+
+            @Override
+            public void onSongResumed() {
+
+                AppLogger.log("[AdPlayer] Song resuming after ad");
+
+                Platform.runLater(() -> {
+
+                    try {
+
+                        if (!playQueue.isEmpty() &&
+                                currentTrackIndex < playQueue.size()) {
+
+                            PlaylistTrack track =
+                                    playQueue.get(currentTrackIndex);
+
+                            // 🔥 SAME SONG resume
+                            vlcPlayer.media().play(
+                                    encodeMediaUrl(track.getUrl())
+                            );
+
+                            // 🔥 SAME POSITION resume
+                            schedular.schedule(() -> {
+                                Platform.runLater(() -> {
+                                    try {
+                                        long savedTime = adPlayer.getSavedSongTime();
+                                        AppLogger.log("[PLAYER] Restoring position: " + savedTime);
+                                        vlcPlayer.controls().setTime(savedTime);
+                                    } catch (Exception e) {
+                                        e.printStackTrace();
+                                    }
+                                });
+                            }, 1500, TimeUnit.MILLISECONDS);
+                        }
+
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                });
+            }
+
+            @Override
+            public void onPlaybackError(Exception ex) {
+                AppLogger.log("[AdPlayer] Playback error: " + ex.getMessage());
+            }
+        });
+
+        // 2. Fetch ads from server
+        try {
+            PlaylistApiService api = new PlaylistApiService();
+            allAds = api.fetchAds();
+
+            AppLogger.log("[PlayerController] Total ads = " + allAds.size());
+
+            for (Ad ad : allAds) {
+
+                AppLogger.log("==============");
+                AppLogger.log("Campaign: " + ad.getCampaignName());
+                AppLogger.log("ScheduleType: " + ad.getScheduleType());
+                AppLogger.log("PlayTimes: " + ad.getPlayTimes());
+                AppLogger.log("ActiveDays: " + ad.getActiveDays());
+            }
+
+            if (allAds == null) {
+                allAds = new ArrayList<>();
+            }
+            AppLogger.log("[AdSystem] Loaded " + allAds.size() + " ads");
+        } catch (Exception e) {
+            AppLogger.log("[AdSystem] Failed to load ads: " + e.getMessage());
+            allAds = new ArrayList<>();
+        }
+
+        // 3. Create scheduler with listeners
+        adScheduler = new AdScheduler(allAds, new AdScheduler.AdScheduleListener() {
+            @Override
+            public void onAdsReady(List<Ad> ads) {
+                AppLogger.log("[AdScheduler] " + ads.size() + " ads due to play");
+                // Queue them for playback
+                if (adPlayer != null) {
+                    adPlayer.queueAds(ads);
+                }
+            }
+
+            @Override
+            public void onScheduleError(Exception ex) {
+                AppLogger.log("[AdScheduler] Error: " + ex.getMessage());
+            }
+        });
+
+        // 4. Start the scheduler
+        adScheduler.start();
+    }
+
+    private void syncAdsFromServer() throws Exception {
+        PlaylistApiService api = new PlaylistApiService();
+        List<Ad> serverAds = api.fetchAds();
+
+        if (serverAds != null && !serverAds.isEmpty()) {
+            allAds = new ArrayList<>(serverAds);
+            if (adScheduler != null) {
+                adScheduler.updateAds(allAds);
+            }
+            AppLogger.log("[SYNC] Ads updated: " + allAds.size() + " ads");
         }
     }
 
@@ -636,6 +843,7 @@ public class PlayerController extends Application {
             if (firstImgUrl != null && !firstImgUrl.trim().isEmpty()) {
                 Platform.runLater(() -> {
                     try {
+                        albumImageView.setImage(null);
                         albumImageView.setImage(new Image(firstImgUrl, true));
                     } catch (Exception ignored) {
                     }
@@ -911,7 +1119,19 @@ public class PlayerController extends Application {
         // New Code for generating the file
         AppLogger.log("[PLAYER][PLAY] " + track.getTitle() + " (ID: " + track.getId() + ")");
 
+//        if (albumImageView != null) {
+//            String albumImgUrl = track.getAlbumImageUrl();
+//            if (albumImgUrl != null && !albumImgUrl.trim().isEmpty()) {
+//                try {
+//                    albumImageView.setImage(new Image(albumImgUrl, true));
+//                } catch (Exception ex) {
+//                    ex.printStackTrace();
+//                }
+//            }
+//        }
+
         if (albumImageView != null) {
+            albumImageView.setImage(null);
             String albumImgUrl = track.getAlbumImageUrl();
             if (albumImgUrl != null && !albumImgUrl.trim().isEmpty()) {
                 try {
@@ -952,7 +1172,8 @@ public class PlayerController extends Application {
                     + File.separator + ".scamusica"
                     + File.separator + "downloads";
 
-            //  String genreFolder = track.getFolderTitle().replaceAll("\\s+", "_");// folderTitle nahi, currentPlaylistName use karo
+            //  String genreFolder = track.getFolderTitle().replaceAll("\\s+", "_");// folderTitle nahi,
+            //  currentPlaylistName use karo
             // kyunki download is folder mein hota hai
             String genreFolder = (currentPlaylistName != null)
                     ? currentPlaylistName.replaceAll("\\s+", "_")
@@ -966,9 +1187,11 @@ public class PlayerController extends Application {
 
             if (encryptedFile.exists()) {
                 AppLogger.log("[PLAYER] Playing from local file: " + encryptedFile.getAbsolutePath());
+                final String fallbackUrl = safeUrl;
                 new Thread(() -> {
                     try {
                         File tempFile = decryptToTemp(encryptedFile);
+                        currentTempFile = tempFile;
                         String localUrl = tempFile.toURI().toString();
 
                         if (!localUrl.contains(".mp3")) {
@@ -1000,8 +1223,33 @@ public class PlayerController extends Application {
                         });
 
                     } catch (Exception e) {
-                        e.printStackTrace();
+                    AppLogger.log("[PLAYER] Decryption failed for song-" + track.getId()
+                            + ", file corrupted. Deleting and streaming from URL. Error: " + e.getMessage());
+                    encryptedFile.delete();
+
+
+                    if (NetworkMonitor.getInstance().isOnline()) {
+                        Platform.runLater(() -> {
+                            AppLogger.log("[PLAYER] Falling back to stream: " + fallbackUrl);
+                            vlcPlayer.media().play(fallbackUrl);
+                            if (!vlcHandlersAttached) {
+                                attachVlcHandlers(albumHeading, titleLabel, progressSlider,
+                                        leftTime, rightTime, controlsWrapper, bottomBar, downloadLabel, autoPlay);
+                                vlcHandlersAttached = true;
+                            }
+                        });
+                    } else {
+                        AppLogger.log("[PLAYER] Offline — cannot stream fallback for song-" + track.getId() + ", skipping to next.");
+                        Platform.runLater(() -> {
+                            try {
+                                playNextTrack(albumHeading, titleLabel, progressSlider,
+                                        leftTime, rightTime, controlsWrapper, bottomBar, downloadLabel);
+                            } catch (Exception ex) {
+                                ex.printStackTrace();
+                            }
+                        });
                     }
+                }
                 }).start();
 
                 return;
@@ -1047,7 +1295,15 @@ public class PlayerController extends Application {
             boolean autoPlay
     ) {
 
-        vlcPlayer.events().addMediaPlayerEventListener(new MediaPlayerEventAdapter() {
+        if (currentVlcListener != null) {
+            try {
+                vlcPlayer.events().removeMediaPlayerEventListener(currentVlcListener);
+            } catch (Exception ignored) {
+            }
+            currentVlcListener = null;
+        }
+
+        currentVlcListener = new MediaPlayerEventAdapter() {
 
             @Override
             public void playing(MediaPlayer mediaPlayer) {
@@ -1100,8 +1356,26 @@ public class PlayerController extends Application {
 
             @Override
             public void finished(MediaPlayer mediaPlayer) {
+
+                if (adPlayer != null && adPlayer.isPlayingAd()) {
+                    AppLogger.log("[PLAYER] Media finished but ad is active, ignoring");
+                    return;
+                }
+
+                if (currentTempFile != null) {
+                    try {
+                        if (currentTempFile.exists()) currentTempFile.delete();
+                        AppLogger.log("[TEMP] Deleted on finish: " + currentTempFile.getName());
+                    } catch (Exception ignored) {
+                    }
+                    currentTempFile = null;
+                }
+
                 Platform.runLater(() -> {
                     try {
+
+                        AppLogger.log("[PLAYER] Song finished, playing next track");
+
                         playNextTrack(
                                 albumHeading,
                                 titleLabel,
@@ -1112,12 +1386,14 @@ public class PlayerController extends Application {
                                 bottomBar,
                                 downloadLabel
                         );
+
                     } catch (Exception e) {
                         e.printStackTrace();
                     }
                 });
             }
-        });
+        };
+        vlcPlayer.events().addMediaPlayerEventListener(currentVlcListener);
     }
 
     private void playNextTrack(Label albumHeading,
@@ -1217,6 +1493,23 @@ public class PlayerController extends Application {
                               Label rightTime,
                               HBox controlsWrapper,
                               Label downloadLabel) {
+
+        if (currentVlcListener != null) {
+            try {
+                vlcPlayer.events().removeMediaPlayerEventListener(currentVlcListener);
+            } catch (Exception ignored) {
+            }
+            currentVlcListener = null;
+        }
+        vlcHandlersAttached = false;
+
+        if (currentTempFile != null) {
+            try {
+                if (currentTempFile.exists()) currentTempFile.delete();
+            } catch (Exception ignored) {
+            }
+            currentTempFile = null;
+        }
 
         if (vlcPlayer != null) {
             try {
