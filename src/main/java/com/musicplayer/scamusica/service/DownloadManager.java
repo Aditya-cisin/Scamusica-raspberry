@@ -195,14 +195,29 @@ public class DownloadManager {
         }
     }
 
+//    private void runWorker() {
+//        while (!cancelled) {
+//            try {
+//                Integer id = downloadQueue.poll(2, TimeUnit.SECONDS);
+//                if (id == null) continue;
+//
+//                processDownload(id);
+//
+//            } catch (Exception e) {
+//                e.printStackTrace();
+//            }
+//        }
+//    }
+
+    // ✅ REPLACE WITH: For Windows
     private void runWorker() {
+        // ✅ Download thread ki priority kam karo taaki playback affect na ho
+        Thread.currentThread().setPriority(Thread.MIN_PRIORITY);
         while (!cancelled) {
             try {
                 Integer id = downloadQueue.poll(2, TimeUnit.SECONDS);
                 if (id == null) continue;
-
                 processDownload(id);
-
             } catch (Exception e) {
                 e.printStackTrace();
             }

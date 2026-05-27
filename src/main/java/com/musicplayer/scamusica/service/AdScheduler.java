@@ -31,6 +31,9 @@ public class AdScheduler {
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm");
     private static final ZoneId SYSTEM_ZONE = ZoneId.systemDefault();
 
+    // Class fields mein add karo:
+    private final Map<Integer, LocalTime> lastPlayedTime = new ConcurrentHashMap<>();
+
     public AdScheduler(List<Ad> ads, AdScheduleListener listener) {
         this.allAds = ads != null ? new ArrayList<>(ads) : new ArrayList<>();
         this.listener = listener;
@@ -209,8 +212,23 @@ public class AdScheduler {
             return false;
         }
 
-        int totalMinutes = currentTime.getHour() * 60 + currentTime.getMinute();
-        return totalMinutes % intervalMinutes == 0;
+        // ✅ Last played time check karo
+        LocalTime lastPlayed = lastPlayedTime.get(ad.getId());
+        if (lastPlayed == null) {
+            // Pehli baar — interval check karo
+            int totalMinutes = currentTime.getHour() * 60 + currentTime.getMinute();
+            boolean due = totalMinutes % intervalMinutes == 0;
+            if (due) lastPlayedTime.put(ad.getId(), currentTime);
+            return due;
+        }
+
+        // ✅ Last played ke baad se enough time gaya?
+        long minutesSinceLast = Duration.between(lastPlayed, currentTime).toMinutes();
+        if (minutesSinceLast < 0) minutesSinceLast += 24 * 60; // midnight crossover handle
+
+        boolean due = minutesSinceLast >= intervalMinutes;
+        if (due) lastPlayedTime.put(ad.getId(), currentTime);
+        return due;
     }
 
     private LocalDate parseDate(String dateStr) {

@@ -7,6 +7,7 @@ import javafx.application.Platform;
 import uk.co.caprica.vlcj.player.base.MediaPlayer;
 import uk.co.caprica.vlcj.player.base.MediaPlayerEventAdapter;
 
+import java.io.File;
 import java.util.*;
 import java.util.concurrent.*;
 
@@ -46,7 +47,24 @@ public class AdPlayer {
 
         AppLogger.log("[AdPlayer] Queueing " + ads.size() + " ads");
 
-        List<Ad> shuffled = new ArrayList<>(ads);
+        List<Ad> playableAds = new ArrayList<>();
+
+        for (Ad ad : ads) {
+            if (AdDownloadManager.isAdDownloaded(ad)) {
+                playableAds.add(ad); // ✅ Local file hai — offline pe bhi chalega
+                AppLogger.log("[AdPlayer] Ad queued (local): " + ad.getCampaignName());
+            } else if (NetworkMonitor.getInstance().isOnline()) {
+                playableAds.add(ad); // ✅ Online hai — stream se chalega
+                AppLogger.log("[AdPlayer] Ad queued (stream): " + ad.getCampaignName());
+            } else {
+                AppLogger.log("[AdPlayer] Skipping ad (offline + not downloaded): " + ad.getCampaignName());
+            }
+        }
+
+        if (playableAds.isEmpty()) return;
+
+        AppLogger.log("[AdPlayer] Queueing " + playableAds.size() + " playable ads");
+        List<Ad> shuffled = new ArrayList<>(playableAds);
         Collections.shuffle(shuffled);
         adQueue.addAll(shuffled);
 
@@ -178,6 +196,20 @@ public class AdPlayer {
     private String buildAdUrl(Ad ad) {
         if (ad == null) return null;
 
+        // ✅ Pehle local file check karo
+        if (AdDownloadManager.isAdDownloaded(ad)) {
+            File localFile = AdDownloadManager.getLocalAdFile(ad);
+            AppLogger.log("[AdPlayer] Playing ad from local file: " + localFile.getAbsolutePath());
+            return localFile.getAbsolutePath();
+        }
+
+        // ✅ Local nahi hai — online check karo
+        if (!NetworkMonitor.getInstance().isOnline()) {
+            AppLogger.log("[AdPlayer] Ad not downloaded and offline, skipping: " + ad.getCampaignName());
+            return null; // null return karega → playNextAd() mein skip ho jayega
+        }
+
+        // ✅ Online hai — URL se play karo
         String audioFile = ad.getAudioFile();
         if (audioFile == null || audioFile.isEmpty()) return null;
 
