@@ -1,15 +1,16 @@
 package com.musicplayer.scamusica.util;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
+import com.google.gson.*;
+import com.musicplayer.scamusica.model.Ad;
 import com.musicplayer.scamusica.model.PlaylistTrack;
 
-import java.io.File;
+import java.io.*;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
+import java.nio.file.*;
+import java.util.*;
+
+import com.google.gson.reflect.TypeToken;
+import java.lang.reflect.Type;
 
 /**
  * OfflineCache — Playlist aur tracks data disk pe save karta hai.
@@ -197,5 +198,43 @@ public class OfflineCache {
     public static boolean hasCachedData() {
         File file = new File(getCacheDir(), TITLES_FILE);
         return file.exists() && file.length() > 0;
+    }
+
+    // ✅ Ad schedule save karo
+    public static void saveAdSchedule(List<Ad> ads) {
+        try {
+            File file = new File(getCacheDir(), "ad_schedule.json");
+            Gson gson = new Gson();
+            String json = gson.toJson(ads);
+            try (FileWriter fw = new FileWriter(file)) {
+                fw.write(json);
+            }
+            AppLogger.log("[OfflineCache] Ad schedule saved: " + ads.size() + " ads");
+        } catch (Exception e) {
+            AppLogger.log("[OfflineCache] Failed to save ad schedule: " + e.getMessage());
+        }
+    }
+
+    // ✅ Ad schedule load karo
+    public static List<Ad> loadAdSchedule() {
+        try {
+            File file = new File(getCacheDir(), "ad_schedule.json");
+            if (!file.exists()) return new ArrayList<>();
+
+            StringBuilder sb = new StringBuilder();
+            try (BufferedReader br = new BufferedReader(new FileReader(file))) {
+                String line;
+                while ((line = br.readLine()) != null) sb.append(line);
+            }
+
+            Gson gson = new Gson();
+            Type type = new TypeToken<List<Ad>>(){}.getType();
+            List<Ad> ads = gson.fromJson(sb.toString(), type);
+            AppLogger.log("[OfflineCache] Ad schedule loaded: " + (ads != null ? ads.size() : 0) + " ads");
+            return ads != null ? ads : new ArrayList<>();
+        } catch (Exception e) {
+            AppLogger.log("[OfflineCache] Failed to load ad schedule: " + e.getMessage());
+            return new ArrayList<>();
+        }
     }
 }
