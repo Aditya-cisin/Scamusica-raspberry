@@ -40,9 +40,6 @@ public class PlaylistApiService {
         return JsonParser.parseString(response).getAsJsonObject();
     }
 
-    // ════════════════════════════════════════════════════════════════════════
-    // CHANGE 1 — fetchPlaylistTitles: success pe cache save, fail pe cache load
-    // ════════════════════════════════════════════════════════════════════════
     public List<String> fetchPlaylistTitles() throws Exception {
         try {
             JsonObject root = fetchRootJson();
@@ -73,7 +70,6 @@ public class PlaylistApiService {
 
             System.out.println("[PlaylistApiService] Playlists from API: " + titles);
 
-            // ✅ SUCCESS — cache mein save karo
             if (!titles.isEmpty()) {
                 OfflineCache.savePlaylistTitles(titles);
             }
@@ -81,20 +77,16 @@ public class PlaylistApiService {
             return titles;
 
         } catch (Exception e) {
-            // ❌ FAIL — cache se load karo
             AppLogger.log("[PlaylistApiService] fetchPlaylistTitles failed, loading from cache: " + e.getMessage());
             List<String> cached = OfflineCache.loadPlaylistTitles();
             if (!cached.isEmpty()) {
                 AppLogger.log("[PlaylistApiService] Using cached titles: " + cached.size());
                 return cached;
             }
-            throw e; // cache bhi nahi hai toh exception do
+            throw e;
         }
     }
 
-    // ════════════════════════════════════════════════════════════════════════
-    // CHANGE 2 — fetchTracksForGenre: success pe cache save, fail pe cache load
-    // ════════════════════════════════════════════════════════════════════════
     public List<PlaylistTrack> fetchTracksForGenre(String genreTitle) throws Exception {
         try {
             List<PlaylistTrack> result = new ArrayList<>();
@@ -160,7 +152,6 @@ public class PlaylistApiService {
 
             System.out.println("[PlaylistApiService] Final Tracks with folder titles → " + result);
 
-            // ✅ SUCCESS — cache mein save karo
             if (!result.isEmpty()) {
                 OfflineCache.saveTracks(genreTitle, result);
             }
@@ -168,20 +159,16 @@ public class PlaylistApiService {
             return result;
 
         } catch (Exception e) {
-            // ❌ FAIL — cache se load karo
             AppLogger.log("[PlaylistApiService] fetchTracksForGenre failed, loading from cache: " + e.getMessage());
             List<PlaylistTrack> cached = OfflineCache.loadTracks(genreTitle);
             if (!cached.isEmpty()) {
                 AppLogger.log("[PlaylistApiService] Using cached tracks for: " + genreTitle);
                 return cached;
             }
-            return new ArrayList<>(); // empty return karo, crash mat karo
+            return new ArrayList<>();
         }
     }
 
-    // ════════════════════════════════════════════════════════════════════════
-    // CHANGE 3 — fetchDownloadSequenceForGenre: success pe cache save, fail pe cache load
-    // ════════════════════════════════════════════════════════════════════════
     public List<Integer> fetchDownloadSequenceForGenre(String genreTitle) throws Exception {
         try {
             List<Integer> downloadSequence = new ArrayList<>();
@@ -246,7 +233,6 @@ public class PlaylistApiService {
 
             System.out.println("[PlaylistApiService] Download sequence for '" + genreTitle + "': " + downloadSequence);
 
-            //  SUCCESS — cache mein save karo
             if (!downloadSequence.isEmpty()) {
                 OfflineCache.saveDownloadSequence(genreTitle, downloadSequence);
             }
@@ -254,17 +240,13 @@ public class PlaylistApiService {
             return downloadSequence;
 
         } catch (Exception e) {
-            // ❌ FAIL — cache se load karo
             AppLogger.log("[PlaylistApiService] fetchDownloadSequence failed, loading from cache: " + e.getMessage());
             List<Integer> cached = OfflineCache.loadDownloadSequence(genreTitle);
             AppLogger.log("[PlaylistApiService] Using cached sequence: " + cached.size() + " items");
-            return cached; // empty bhi theek hai
+            return cached;
         }
     }
 
-    // ════════════════════════════════════════════════════════════════════════
-    // parseSongToTrack — BILKUL SAME, kuch nahi badla
-    // ════════════════════════════════════════════════════════════════════════
     private PlaylistTrack parseSongToTrack(JsonObject songObj,
                                            String commonPath,
                                            String folderTitle) {
@@ -376,23 +358,19 @@ public class PlaylistApiService {
                 ad.setEndDate(adObj.has("end_date") ? adObj.get("end_date").getAsString() : null);
                 ad.setStatus(adObj.has("status") ? adObj.get("status").getAsString() : "inactive");
 
-                // Handle playTimes (can be array or number)
                 if (adObj.has("play_times")) {
                     JsonElement ptEl = adObj.get("play_times");
                     if (ptEl.isJsonArray()) {
-                        // Custom schedule
                         List<String> times = new ArrayList<>();
                         for (JsonElement t : ptEl.getAsJsonArray()) {
                             times.add(t.getAsString());
                         }
                         ad.setPlayTimes(times);
                     } else if (ptEl.isJsonPrimitive()) {
-                        // Interval schedule
                         ad.setPlayTimes(ptEl.getAsInt());
                     }
                 }
 
-                // Handle activeDays
                 if (adObj.has("active_days") && adObj.get("active_days").isJsonArray()) {
                     List<String> days = new ArrayList<>();
                     for (JsonElement day : adObj.getAsJsonArray("active_days")) {
@@ -406,15 +384,10 @@ public class PlaylistApiService {
 
             System.out.println("[PlaylistApiService] Fetched " + ads.size() + " ads");
 
-            // Cache ads if needed
-            // OfflineCache.saveAds(ads);
-
             return ads;
 
         } catch (Exception e) {
             AppLogger.log("[PlaylistApiService] fetchAds failed: " + e.getMessage());
-            // Try cache if available
-            // List<Ad> cached = OfflineCache.loadAds();
             return new ArrayList<>();
         }
     }

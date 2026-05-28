@@ -1,10 +1,5 @@
 package com.musicplayer.scamusica.ui;
 
-/**
- * Handles the creation and management of the player's header section.
- * Contains version information, application logo, and user controls.
- */
-
 import com.musicplayer.scamusica.manager.LanguageManager;
 import com.musicplayer.scamusica.manager.SessionManager;
 import com.musicplayer.scamusica.service.NetworkMonitor;
@@ -17,11 +12,6 @@ import javafx.scene.layout.*;
 import javafx.scene.text.Font;
 
 public class PlayerHeader {
-    /**
-     * Creates the left metadata section containing version, ID, and support button.
-     *
-     * @return HBox containing the left-aligned metadata elements
-     */
     public HBox createLeftMeta() {
         HBox leftMeta = new HBox(14);
         leftMeta.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
@@ -41,12 +31,6 @@ public class PlayerHeader {
         return leftMeta;
     }
 
-    /**
-     * Creates and configures the application logo view.
-     *
-     * @param clazz The class used for resource loading
-     * @return ImageView containing the application logo
-     */
     public ImageView createLogoView(Class<?> clazz) {
         ImageView logoView = new ImageView();
         try {
@@ -59,20 +43,6 @@ public class PlayerHeader {
         return logoView;
     }
 
-    /**
-     * Creates the right metadata section showing online status.
-     *
-     * @return HBox containing the right-aligned online status indicator
-     */
-//    public HBox createRightMeta() {
-//        Label onlineLbl = new Label();
-//        onlineLbl.textProperty().bind(LanguageManager.createStringBinding("label.online"));
-//        onlineLbl.setStyle("-fx-color: #000000;" + "-fx-font-size: 14px;");
-//        HBox rightMeta = new HBox(8, new javafx.scene.shape.Circle(8, javafx.scene.paint.Color.web("#248924")), onlineLbl);
-//        rightMeta.setAlignment(javafx.geometry.Pos.CENTER_RIGHT);
-//        return rightMeta;
-//    }
-
     public HBox createRightMeta() {
         javafx.scene.shape.Circle statusCircle =
                 new javafx.scene.shape.Circle(8, javafx.scene.paint.Color.web("#ef4444"));
@@ -82,25 +52,21 @@ public class PlayerHeader {
 
         NetworkMonitor monitor = NetworkMonitor.getInstance();
 
-        // ✅ Circle + Label dono update karne ka ek Runnable
         Runnable updateUI = () -> {
             boolean isOnline = monitor.isOnline();
             statusCircle.setFill(
                     isOnline
-                            ? javafx.scene.paint.Color.web("#248924")  // green
-                            : javafx.scene.paint.Color.web("#ef4444")  // red
+                            ? javafx.scene.paint.Color.web("#248924")
+                            : javafx.scene.paint.Color.web("#ef4444")
             );
             String key = isOnline ? "label.online" : "label.offline";
             onlineLbl.textProperty().bind(LanguageManager.createStringBinding(key));
         };
 
-        // ✅ Listener — jab bhi change ho
         monitor.onlineProperty().addListener((obs, old, now) ->
                 javafx.application.Platform.runLater(updateUI)
         );
 
-        // ✅ Initial state — monitor start hone ke baad check karo
-        // Platform.runLater se guarantee hoga ki monitor.start() ho chuka hai
         javafx.application.Platform.runLater(updateUI);
 
         HBox rightMeta = new HBox(8, statusCircle, onlineLbl);
@@ -108,14 +74,6 @@ public class PlayerHeader {
         return rightMeta;
     }
 
-    /**
-     * Creates the main header container with left, center, and right sections.
-     *
-     * @param left Left section containing metadata
-     * @param center Center section containing the logo
-     * @param right Right section containing status indicators
-     * @return BorderPane containing the complete header
-     */
     public BorderPane createHeader(HBox left, ImageView center, HBox right) {
         BorderPane header = new BorderPane();
         header.getStyleClass().add("app-header");
@@ -126,11 +84,6 @@ public class PlayerHeader {
         return header;
     }
 
-    /**
-     * Creates the main title label for the player.
-     *
-     * @return Label displaying the current track information
-     */
     public Label createPlayerTitle() {
         Label titleCentered = new Label("Escuchando Top 40");
         titleCentered.getStyleClass().add("player-title");
@@ -138,12 +91,6 @@ public class PlayerHeader {
         return titleCentered;
     }
 
-    /**
-     * Creates a centered container for the player title.
-     *
-     * @param titleCentered The label to be centered
-     * @return VBox containing the centered title
-     */
     public VBox createCenterContainer(Label titleCentered) {
         VBox centerContainer = new VBox();
         centerContainer.setAlignment(javafx.geometry.Pos.CENTER);
@@ -151,17 +98,11 @@ public class PlayerHeader {
         return centerContainer;
     }
 
-    /**
-     * Loads custom fonts for the application.
-     *
-     * @param clazz The class used for resource loading
-     */
     public void loadFonts(Class<?> clazz) {
         try {
             Font.loadFont(clazz.getResourceAsStream("/fonts/Poppins-Regular.ttf"), 12);
             Font.loadFont(clazz.getResourceAsStream("/fonts/Poppins-Bold.ttf"), 12);
 
-            // Fallback fonts for multilingual support
             Font.loadFont(clazz.getResourceAsStream("/fonts/NotoSans-Regular.ttf"), 12);
             Font.loadFont(clazz.getResourceAsStream("/fonts/NotoSansArabic-Regular.ttf"), 12);
             Font.loadFont(clazz.getResourceAsStream("/fonts/NotoSansDevanagari-Regular.ttf"), 12);

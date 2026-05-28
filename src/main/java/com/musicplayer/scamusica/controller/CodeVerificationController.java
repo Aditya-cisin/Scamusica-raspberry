@@ -46,12 +46,11 @@ public class CodeVerificationController extends Application {
             setOnlineStatus(status);
         });
         monitor.start();
-        // UI Elements
+
         root = new BorderPane();
-        // Load the background image
+
         Image background = new Image(getClass().getResource("/images/background.jpg").toExternalForm()); // Path to background image
 
-        // Create BackgroundImage and BackgroundSize
         BackgroundSize backgroundSize = new BackgroundSize(
                 BackgroundSize.AUTO, BackgroundSize.AUTO, // Width and height
                 true, false, // Contain and Cover
@@ -65,7 +64,7 @@ public class CodeVerificationController extends Application {
                 BackgroundPosition.CENTER,
                 backgroundSize
         );
-        // Create Background and set it to the BorderPane
+
         root.setBackground(new Background(backgroundImage));
 
         header = new HBox(15);
@@ -130,41 +129,21 @@ public class CodeVerificationController extends Application {
 
         Text messageText = new Text();
         messageText.setFill(Color.RED);
-        // Layout
-        VBox loginBox = new VBox(10); // Spacing of 10 pixels
+
+        VBox loginBox = new VBox(10);
         loginBox.setAlignment(Pos.CENTER_LEFT);
         loginBox.setPrefSize(150, 200);
         loginBox.setMaxSize(Region.USE_PREF_SIZE, Region.USE_PREF_SIZE);
         loginBox.setStyle("-fx-background-color: white;"+
                 "-fx-text-fill: black; " +
                 "-fx-background-radius: 20;");
-        loginBox.setPadding(new Insets(20)); // Padding around the layout
+        loginBox.setPadding(new Insets(20));
         loginBox.getChildren().addAll(
                 passwordLabel, passwordField,
                 loginButton, messageText);
 
         root.setCenter(loginBox);
 
-
-        // Event Handling
-        /*loginButton.setOnAction(event -> {
-
-                String enteredPassword = passwordField.getText();
-
-                if (enteredPassword.equals(CORRECT_PASSCODE)) {
-                    messageText.setText("Player Activated successful!");
-                    PlayerController controller = new PlayerController();
-                    controller.start(primaryStage);
-                    // Here, you would typically navigate to another scene or window
-                } else {
-                    if(enteredPassword.isEmpty())
-                        messageText.setText("Please enter the code");
-
-                    else
-                        messageText.setText("Activation failed. Invalid Code");
-                }
-
-        });*/
         loginButton.setOnAction(event -> {
             if(!SessionManager.isUserLoggedIn()) {
                 if(onlineStatus) {
@@ -175,34 +154,31 @@ public class CodeVerificationController extends Application {
                         return;
                     }
 
-                    // Disable button while calling API
                     loginButton.setDisable(true);
                     messageText.textProperty().bind(LanguageManager.createStringBinding("text.verify"));
                     messageText.setFill(Color.GREEN);
 
-                    // Run API call in background thread (important for JavaFX)
                     new Thread(() -> {
                         try {
-                            // Create HTTP client
                             client = HttpClient.newHttpClient();
-                            // system identification id for no cloning
+
                             String deviceId = DeviceFingerprint.getFingerprint();
-                            // JSON body
+
                             String requestBody = "{"
                                     + "\"licenseCode\": \"" + enteredPassword + "\","
                                     + "\"deviceId\": \"" + deviceId + "\""
                                     + "}";
-                            // String jsonBody = "{ \"licenseCode\": \"" + enteredPassword + "\" }";
+
                             HttpRequest request = HttpRequest.newBuilder()
                                     .uri(URI.create(Utility.BASE_URL.get() + Utility.VERIFY_LICENSE_CODE.get()))
                                     .timeout(Duration.ofSeconds(8))
                                     .header("Content-Type", "application/json")
                                     .POST(HttpRequest.BodyPublishers.ofString(requestBody))
                                     .build();
-                            // Send request
+
                             HttpResponse<String> response =
                                     client.send(request, HttpResponse.BodyHandlers.ofString());
-                            // Parse response
+
                             ObjectMapper mapper = new ObjectMapper();
                             JsonNode jsonNode = mapper.readTree(response.body());
                             boolean success = jsonNode.get("success").asBoolean();
@@ -212,7 +188,6 @@ public class CodeVerificationController extends Application {
                                 SessionManager.saveToken(jsonNode.get("token").asText(), userId, LanguageManager.getLangCode());
 
                                 Platform.runLater(() -> {
-                                    // YOUR EXISTING NAVIGATION – unchanged
                                     PlayerController controller = new PlayerController();
                                     controller.start(primaryStage);
                                 });
@@ -247,24 +222,11 @@ public class CodeVerificationController extends Application {
                     });
                 }
             }else{
-                // YOUR EXISTING NAVIGATION – unchanged
                 PlayerController controller = new PlayerController();
                 controller.start(primaryStage);
             }
         });
 
-
-       /* // Bottom Bar
-        HBox bottomBar = new HBox(30);
-        bottomBar.setPadding(new Insets(20, 80, 20, 80));
-        bottomBar.setAlignment(Pos.CENTER);
-        bottomBar.setStyle("-fx-background-color: transparent;");
-
-        Label version= new Label("Version 11 Scamusica@2025");
-        version.setTextFill(Color.WHITE);
-        bottomBar.getChildren().add(version);
-        root.setBottom(bottomBar);*/
-        // Scene and Stage setup
         Scene scene = new Scene(root, 960, 600);
         primaryStage.setScene(scene);
         primaryStage.titleProperty().bind(
@@ -274,25 +236,12 @@ public class CodeVerificationController extends Application {
         primaryStage.setMinWidth(960);
         primaryStage.show();
 
-       /* Platform.runLater(() -> {
-            // delay start so network + SSL are ready
-            new Thread(() -> {
-                try {
-                    Thread.sleep(2000);
-                } catch (InterruptedException ignored) {}
-                monitor.start();
-            }).start();
-        });*/
     }
     private void setOnlineStatus(ConnectivityMonitor.Status status) {
-
-        // FIRST real update only
         if (status == ConnectivityMonitor.Status.ONLINE) {
             onlineStatus=true;
-
         } else {
             onlineStatus=false;
-
         }
     }
     public static void reloadUI() {

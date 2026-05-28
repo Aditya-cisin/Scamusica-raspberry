@@ -12,15 +12,6 @@ import java.util.*;
 import com.google.gson.reflect.TypeToken;
 import java.lang.reflect.Type;
 
-/**
- * OfflineCache — Playlist aur tracks data disk pe save karta hai.
- * Internet nahi hone pe yahan se data load hota hai.
- *
- * Cache location: ~/.scamusica/cache/
- *   - playlist_titles.json  → sabhi playlist names
- *   - tracks_<genreName>.json → ek genre ke tracks
- *   - download_seq_<genreName>.json → ek genre ki download sequence
- */
 public class OfflineCache {
 
     private static final String CACHE_DIR = System.getProperty("user.home")
@@ -33,7 +24,6 @@ public class OfflineCache {
 
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
-    // ─── Cache directory ensure karo ────────────────────────────────────────
     private static File getCacheDir() {
         File dir = new File(CACHE_DIR);
         if (!dir.exists()) {
@@ -42,18 +32,10 @@ public class OfflineCache {
         return dir;
     }
 
-    // ─── Genre name ko safe filename mein convert karo ───────────────────────
     private static String safeFileName(String genreName) {
         return genreName.replaceAll("[^a-zA-Z0-9_\\-]", "_");
     }
 
-    // ════════════════════════════════════════════════════════════════════════
-    // PLAYLIST TITLES — save & load
-    // ════════════════════════════════════════════════════════════════════════
-
-    /**
-     * Playlist titles disk pe save karo (API call successful hone ke baad call karo)
-     */
     public static void savePlaylistTitles(List<String> titles) {
         try {
             File file = new File(getCacheDir(), TITLES_FILE);
@@ -65,10 +47,6 @@ public class OfflineCache {
         }
     }
 
-    /**
-     * Disk se playlist titles load karo (offline fallback)
-     * @return titles list, ya empty list agar cache nahi hai
-     */
     public static List<String> loadPlaylistTitles() {
         try {
             File file = new File(getCacheDir(), TITLES_FILE);
@@ -86,13 +64,6 @@ public class OfflineCache {
         }
     }
 
-    // ════════════════════════════════════════════════════════════════════════
-    // TRACKS — save & load
-    // ════════════════════════════════════════════════════════════════════════
-
-    /**
-     * Ek genre ke tracks disk pe save karo
-     */
     public static void saveTracks(String genreTitle, List<PlaylistTrack> tracks) {
         try {
             File file = new File(getCacheDir(), TRACKS_PREFIX + safeFileName(genreTitle) + ".json");
@@ -104,10 +75,6 @@ public class OfflineCache {
         }
     }
 
-    /**
-     * Disk se ek genre ke tracks load karo (offline fallback)
-     * @return tracks list, ya empty list agar cache nahi hai
-     */
     public static List<PlaylistTrack> loadTracks(String genreTitle) {
         try {
             File file = new File(getCacheDir(), TRACKS_PREFIX + safeFileName(genreTitle) + ".json");
@@ -126,13 +93,6 @@ public class OfflineCache {
         }
     }
 
-    // ════════════════════════════════════════════════════════════════════════
-    // DOWNLOAD SEQUENCE — save & load
-    // ════════════════════════════════════════════════════════════════════════
-
-    /**
-     * Ek genre ki download sequence disk pe save karo
-     */
     public static void saveDownloadSequence(String genreTitle, List<Integer> sequence) {
         try {
             File file = new File(getCacheDir(), SEQ_PREFIX + safeFileName(genreTitle) + ".json");
@@ -144,10 +104,6 @@ public class OfflineCache {
         }
     }
 
-    /**
-     * Disk se ek genre ki download sequence load karo (offline fallback)
-     * @return sequence list, ya empty list agar cache nahi hai
-     */
     public static List<Integer> loadDownloadSequence(String genreTitle) {
         try {
             File file = new File(getCacheDir(), SEQ_PREFIX + safeFileName(genreTitle) + ".json");
@@ -156,7 +112,6 @@ public class OfflineCache {
                 return new ArrayList<>();
             }
             String json = new String(Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8);
-            // Gson numbers ko Double parse karta hai, isliye Integer mein convert karo
             List list = GSON.fromJson(json, List.class);
             List<Integer> sequence = new ArrayList<>();
             if (list != null) {
@@ -174,33 +129,21 @@ public class OfflineCache {
         }
     }
 
-    // ════════════════════════════════════════════════════════════════════════
-    // INTERNET CHECK
-    // ════════════════════════════════════════════════════════════════════════
-
-    /**
-     * Internet available hai ya nahi check karo
-     * Simple aur fast — sirf Google DNS ping karta hai
-     */
     public static boolean isInternetAvailable() {
         try {
             java.net.InetAddress address = java.net.InetAddress.getByName("8.8.8.8");
-            return address.isReachable(2000); // 2 second timeout
+            return address.isReachable(2000);
         } catch (Exception e) {
             AppLogger.log("[OfflineCache] Internet check failed: " + e.getMessage());
             return false;
         }
     }
 
-    /**
-     * Cache exist karta hai ya nahi — matlab pehle kabhi online tha ya nahi
-     */
     public static boolean hasCachedData() {
         File file = new File(getCacheDir(), TITLES_FILE);
         return file.exists() && file.length() > 0;
     }
 
-    // ✅ Ad schedule save karo
     public static void saveAdSchedule(List<Ad> ads) {
         try {
             File file = new File(getCacheDir(), "ad_schedule.json");
@@ -215,7 +158,6 @@ public class OfflineCache {
         }
     }
 
-    // ✅ Ad schedule load karo
     public static List<Ad> loadAdSchedule() {
         try {
             File file = new File(getCacheDir(), "ad_schedule.json");

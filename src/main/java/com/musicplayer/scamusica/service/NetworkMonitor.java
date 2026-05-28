@@ -12,22 +12,15 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
-/**
- * Monitors internet connectivity and exposes a JavaFX observable property.
- * Checks every 5 seconds by making a lightweight HTTP HEAD request.
- */
 public class NetworkMonitor {
 
-    // Singleton instance
     private static NetworkMonitor instance;
 
-    // Observable property — UI binds to this
     private final BooleanProperty online = new SimpleBooleanProperty(false);
 
     private ScheduledExecutorService scheduler;
     private volatile boolean running = false;
 
-    // URL used for connectivity ping (lightweight, reliable)
     private static final String PING_URL = "https://clients3.google.com/generate_204";
     private static final int TIMEOUT_MS = 3000;
     private static final int CHECK_INTERVAL_SEC = 5;
@@ -41,10 +34,6 @@ public class NetworkMonitor {
         return instance;
     }
 
-    /**
-     * Returns the observable online property.
-     * Bind your UI elements to this.
-     */
     public BooleanProperty onlineProperty() {
         return online;
     }
@@ -53,19 +42,15 @@ public class NetworkMonitor {
         return online.get();
     }
 
-    /**
-     * Start monitoring. Safe to call multiple times.
-     */
     public void start() {
         if (running) return;
         running = true;
 
-        // Check immediately on start
         checkConnectivity();
 
         scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
             Thread t = new Thread(r, "NetworkMonitor");
-            t.setDaemon(true); // Won't block app shutdown
+            t.setDaemon(true);
             return t;
         });
 
@@ -79,9 +64,6 @@ public class NetworkMonitor {
         AppLogger.log("[NetworkMonitor] Started");
     }
 
-    /**
-     * Stop monitoring. Call on app close.
-     */
     public void stop() {
         running = false;
         if (scheduler != null) {
@@ -91,10 +73,6 @@ public class NetworkMonitor {
         AppLogger.log("[NetworkMonitor] Stopped");
     }
 
-    /**
-     * Performs the actual connectivity check.
-     * Runs on background thread, updates property on FX thread.
-     */
     private void checkConnectivity() {
         boolean result = pingServer();
         Platform.runLater(() -> {
@@ -115,7 +93,6 @@ public class NetworkMonitor {
             connection.setInstanceFollowRedirects(false);
             int responseCode = connection.getResponseCode();
             connection.disconnect();
-            // 204 = Google's no-content response, 200/301 also valid
             return (responseCode == 204 || responseCode == 200 || responseCode == 301);
         } catch (IOException e) {
             return false;

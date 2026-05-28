@@ -55,7 +55,6 @@ public class Ad {
         this.status = status;
     }
 
-    // Getters
     public Integer getId() {
         return id;
     }
@@ -100,7 +99,6 @@ public class Ad {
         return generatedAudio;
     }
 
-    // Setters
     public void setId(Integer id) {
         this.id = id;
     }

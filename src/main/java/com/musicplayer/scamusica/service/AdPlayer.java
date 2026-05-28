@@ -23,7 +23,6 @@ public class AdPlayer {
 
     private final MediaPlayer vlcPlayer;
     private final AdPlaybackListener listener;
-//    private final ExecutorService executor = Executors.newSingleThreadExecutor();
 
     private final ExecutorService executor = Executors.newSingleThreadExecutor(r -> {
         Thread t = new Thread(r, "AdPlayer-Thread");
@@ -33,7 +32,6 @@ public class AdPlayer {
     private final Queue<Ad> adQueue = new ConcurrentLinkedQueue<>();
     private volatile boolean isPlayingAd = false;
 
-    // Song state — kaunsa song tha aur kahan tha
     private volatile String savedSongPath = null;
     private volatile long savedSongTime = 0L;
 
@@ -51,10 +49,10 @@ public class AdPlayer {
 
         for (Ad ad : ads) {
             if (AdDownloadManager.isAdDownloaded(ad)) {
-                playableAds.add(ad); // ✅ Local file hai — offline pe bhi chalega
+                playableAds.add(ad);
                 AppLogger.log("[AdPlayer] Ad queued (local): " + ad.getCampaignName());
             } else if (NetworkMonitor.getInstance().isOnline()) {
-                playableAds.add(ad); // ✅ Online hai — stream se chalega
+                playableAds.add(ad);
                 AppLogger.log("[AdPlayer] Ad queued (stream): " + ad.getCampaignName());
             } else {
                 AppLogger.log("[AdPlayer] Skipping ad (offline + not downloaded): " + ad.getCampaignName());
@@ -101,14 +99,10 @@ public class AdPlayer {
     private void playAdInternal(Ad ad) throws Exception {
         AppLogger.log("[AdPlayer] Preparing ad: " + ad.getCampaignName());
 
-        // Step 1: Save current song state
         try {
             savedSongTime = vlcPlayer.status().time();
-            // Note: VLC mein current media path get karna hard hai,
-            // isliye PlayerController se inject karenge (neeche dekho)
         } catch (Exception ignored) {}
 
-        // Step 2: Stop current song
         Platform.runLater(() -> {
             try {
 
@@ -124,7 +118,6 @@ public class AdPlayer {
         });
         Thread.sleep(600);
 
-        // Step 3: Build ad URL
         String adUrl = buildAdUrl(ad);
         if (adUrl == null) {
             AppLogger.log("[AdPlayer] Invalid ad URL, skipping");
@@ -134,7 +127,6 @@ public class AdPlayer {
 
         AppLogger.log("[AdPlayer] Playing ad from URL: " + adUrl);
 
-        // Step 4: Play ad using CountDownLatch to wait for finish
         CountDownLatch latch = new CountDownLatch(1);
 
         Platform.runLater(() -> {
@@ -144,10 +136,7 @@ public class AdPlayer {
                 boolean result = vlcPlayer.media().play(adUrl);
 
                 AppLogger.log("[AdPlayer] VLC PLAY RESULT = " + result);
-//                vlcPlayer.media().play(adUrl);
 
-
-                // One-time listener for this ad
                 vlcPlayer.events().addMediaPlayerEventListener(new MediaPlayerEventAdapter() {
                     @Override
                     public void finished(MediaPlayer mediaPlayer) {
@@ -169,16 +158,13 @@ public class AdPlayer {
             }
         });
 
-        // Step 5: Wait for ad to finish (max 10 minutes)
         boolean finished = latch.await(10, TimeUnit.MINUTES);
         AppLogger.log("[AdPlayer] Ad latch released, finished=" + finished);
 
         Thread.sleep(300);
 
-        // Step 6: Ad done, notify
         Platform.runLater(() -> listener.onAdPlaybackFinished(ad));
 
-        // Step 7: Play next ad or resume song
         playNextAd();
     }
 
@@ -186,7 +172,6 @@ public class AdPlayer {
         Platform.runLater(() -> {
             try {
                 listener.onSongResumed();
-                // Song resume PlayerController handle karega via onSongResumed callback
             } catch (Exception e) {
                 AppLogger.log("[AdPlayer] Resume error: " + e.getMessage());
             }
@@ -196,30 +181,24 @@ public class AdPlayer {
     private String buildAdUrl(Ad ad) {
         if (ad == null) return null;
 
-        // ✅ Pehle local file check karo
         if (AdDownloadManager.isAdDownloaded(ad)) {
             File localFile = AdDownloadManager.getLocalAdFile(ad);
             AppLogger.log("[AdPlayer] Playing ad from local file: " + localFile.getAbsolutePath());
             return localFile.getAbsolutePath();
         }
 
-        // ✅ Local nahi hai — online check karo
         if (!NetworkMonitor.getInstance().isOnline()) {
             AppLogger.log("[AdPlayer] Ad not downloaded and offline, skipping: " + ad.getCampaignName());
-            return null; // null return karega → playNextAd() mein skip ho jayega
+            return null;
         }
 
-        // ✅ Online hai — URL se play karo
         String audioFile = ad.getAudioFile();
         if (audioFile == null || audioFile.isEmpty()) return null;
 
-        // Agar already full URL hai
         if (audioFile.startsWith("http://") || audioFile.startsWith("https://")) {
             return audioFile;
         }
 
-        // Server se relative path — BASE_URL se joodo
-        // "public/ads/generated-speech (2).mp3" → space encode karo
         String encoded = audioFile
                 .replace(" ", "%20")
                 .replace("(", "%28")
