@@ -78,6 +78,8 @@ public class PlayerController extends Application {
     private final List<PlaylistTrack> playQueue = Collections.synchronizedList(new ArrayList<>());
     private int currentTrackIndex = 0;
 
+    private volatile boolean isFirstTrackStarted = false;
+
     private ImageView albumImageView;
 
     private final List<String> tempPlaylist = Arrays.asList(
@@ -599,6 +601,9 @@ public class PlayerController extends Application {
                         if (globalControlsWrapper != null) {
                             globalControlsWrapper.setDisable(true);
                         }
+
+                        setGenreSwitchEnabled(false);
+
                         // ✅ Volume slider alone enable rakho
                         if (globalBottomBar != null) {
                             Slider volumeSlider = controlsUtil.getVolumeSlider(globalBottomBar);
@@ -641,6 +646,8 @@ public class PlayerController extends Application {
                         if (globalControlsWrapper != null) {
                             globalControlsWrapper.setDisable(false);
                         }
+
+                        setGenreSwitchEnabled(true);
 
                     } catch (Exception e) {
                         e.printStackTrace();
@@ -982,6 +989,7 @@ public class PlayerController extends Application {
 
         playQueue.clear();
         currentTrackIndex = 0;
+        isFirstTrackStarted = false;
 
         try {
             PlaylistApiService playlistApiService = new PlaylistApiService();
@@ -1074,40 +1082,87 @@ public class PlayerController extends Application {
                                 updateGenreDownloadLabel(downloadLabel);
                             }
 
+//                            @Override
+//                            public void onDownloadCompleted(int songId, File outputFile) {
+//
+//                                recomputeGlobalCountAndUpdateUI();
+//
+//                                Platform.runLater(() -> {
+//
+//                                    int newGenreCount = countExistingInGenreFolder(genreFolderPath);
+//                                    currentGenreDownloadedCount.set(newGenreCount);
+//
+//                                    currentFileProgressFraction = 0.0;
+//
+//                                    updateGenreDownloadLabel(downloadLabel);
+//                                    updatePlayButtonState(controlsWrapper);
+//                                    AppLogger.log("[AUTO-PLAY] Downloaded count: " + newGenreCount);
+//                                    if (newGenreCount >= 2) {
+//                                        if (!vlcPlayer.status().isPlaying() && !userPaused) {
+//                                            try {
+//                                                AppLogger.log("[AutoPlay] 2 songs downloaded. Starting playback." +
+//                                                        "..");
+//                                                playTrack(
+//                                                        albumHeading,
+//                                                        titleLabel,
+//                                                        progressSlider,
+//                                                        leftTime,
+//                                                        rightTime,
+//                                                        controlsWrapper,
+//                                                        bottomBar,
+//                                                        downloadLabel,
+//                                                        true
+//                                                );
+//                                            } catch (URISyntaxException e) {
+//                                                e.printStackTrace();
+//                                            }
+//                                        }
+//                                    }
+//                                });
+//                            }
+
                             @Override
                             public void onDownloadCompleted(int songId, File outputFile) {
-
                                 recomputeGlobalCountAndUpdateUI();
 
                                 Platform.runLater(() -> {
-
                                     int newGenreCount = countExistingInGenreFolder(genreFolderPath);
                                     currentGenreDownloadedCount.set(newGenreCount);
-
                                     currentFileProgressFraction = 0.0;
 
                                     updateGenreDownloadLabel(downloadLabel);
                                     updatePlayButtonState(controlsWrapper);
-                                    AppLogger.log("[AUTO-PLAY] Downloaded count: " + newGenreCount);
-                                    if (newGenreCount >= 2) {
-                                        if (!vlcPlayer.status().isPlaying() && !userPaused) {
-                                            try {
-                                                AppLogger.log("[AutoPlay] 2 songs downloaded. Starting playback." +
-                                                        "..");
-                                                playTrack(
-                                                        albumHeading,
-                                                        titleLabel,
-                                                        progressSlider,
-                                                        leftTime,
-                                                        rightTime,
-                                                        controlsWrapper,
-                                                        bottomBar,
-                                                        downloadLabel,
-                                                        true
-                                                );
-                                            } catch (URISyntaxException e) {
-                                                e.printStackTrace();
+                                    AppLogger.log("[AUTO-PLAY] Downloaded: " + newGenreCount + "/" + currentGenreTotalFiles);
+
+                                    // ✅ FIX: Add isFirstTrackStarted check
+                                    if (newGenreCount >= 2
+                                            && !isFirstTrackStarted      // ← ← ← NEW
+                                            && !vlcPlayer.status().isPlaying()
+                                            && !userPaused
+                                            && (playQueue.isEmpty() || currentTrackIndex == 0)) {  // ← ← ← NEW
+
+                                        try {
+                                            if (playQueue.isEmpty()) {
+                                                return;
                                             }
+
+                                            AppLogger.log("[AutoPlay] 2 songs ready. Starting playback...");
+                                            playTrack(
+                                                    albumHeading,
+                                                    titleLabel,
+                                                    progressSlider,
+                                                    leftTime,
+                                                    rightTime,
+                                                    controlsWrapper,
+                                                    bottomBar,
+                                                    downloadLabel,
+                                                    true
+                                            );
+
+                                            isFirstTrackStarted = true;  // ← ← ← SET FLAG AFTER PLAY
+
+                                        } catch (URISyntaxException e) {
+                                            e.printStackTrace();
                                         }
                                     }
                                 });
@@ -1281,9 +1336,9 @@ public class PlayerController extends Application {
 
         titleLabel.setText(track.getTitle());
 
-        if (vlcPlayer != null) {
+        if (vlcPlayer != null && vlcPlayer.status().isPlaying()) {
             try {
-                vlcPlayer.controls().stop();
+                vlcPlayer.controls().pause();
             } catch (Exception ignored) {
             }
         }
@@ -1352,33 +1407,33 @@ public class PlayerController extends Application {
                         });
 
                     } catch (Exception e) {
-                        AppLogger.log("[PLAYER] Decryption failed for song-" + track.getId()
-                                + ", file corrupted. Deleting and streaming from URL. Error: " + e.getMessage());
-                        encryptedFile.delete();
+                    AppLogger.log("[PLAYER] Decryption failed for song-" + track.getId()
+                            + ", file corrupted. Deleting and streaming from URL. Error: " + e.getMessage());
+                    encryptedFile.delete();
 
 
-                        if (NetworkMonitor.getInstance().isOnline()) {
-                            Platform.runLater(() -> {
-                                AppLogger.log("[PLAYER] Falling back to stream: " + fallbackUrl);
-                                vlcPlayer.media().play(fallbackUrl);
-                                if (!vlcHandlersAttached) {
-                                    attachVlcHandlers(albumHeading, titleLabel, progressSlider,
-                                            leftTime, rightTime, controlsWrapper, bottomBar, downloadLabel, autoPlay);
-                                    vlcHandlersAttached = true;
-                                }
-                            });
-                        } else {
-                            AppLogger.log("[PLAYER] Offline — cannot stream fallback for song-" + track.getId() + ", skipping to next.");
-                            Platform.runLater(() -> {
-                                try {
-                                    playNextTrack(albumHeading, titleLabel, progressSlider,
-                                            leftTime, rightTime, controlsWrapper, bottomBar, downloadLabel);
-                                } catch (Exception ex) {
-                                    ex.printStackTrace();
-                                }
-                            });
-                        }
+                    if (NetworkMonitor.getInstance().isOnline()) {
+                        Platform.runLater(() -> {
+                            AppLogger.log("[PLAYER] Falling back to stream: " + fallbackUrl);
+                            vlcPlayer.media().play(fallbackUrl);
+                            if (!vlcHandlersAttached) {
+                                attachVlcHandlers(albumHeading, titleLabel, progressSlider,
+                                        leftTime, rightTime, controlsWrapper, bottomBar, downloadLabel, autoPlay);
+                                vlcHandlersAttached = true;
+                            }
+                        });
+                    } else {
+                        AppLogger.log("[PLAYER] Offline — cannot stream fallback for song-" + track.getId() + ", skipping to next.");
+                        Platform.runLater(() -> {
+                            try {
+                                playNextTrack(albumHeading, titleLabel, progressSlider,
+                                        leftTime, rightTime, controlsWrapper, bottomBar, downloadLabel);
+                            } catch (Exception ex) {
+                                ex.printStackTrace();
+                            }
+                        });
                     }
+                }
                 });
                 decryptThread.setDaemon(true);
                 decryptThread.setPriority(Thread.MAX_PRIORITY);
