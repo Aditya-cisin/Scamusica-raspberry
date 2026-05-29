@@ -16,14 +16,17 @@ public class NetworkMonitor {
 
     private static NetworkMonitor instance;
 
+    private int failureCount = 0;
+    private static final int FAILURE_THRESHOLD = 2;
+
     private final BooleanProperty online = new SimpleBooleanProperty(false);
 
     private ScheduledExecutorService scheduler;
     private volatile boolean running = false;
 
-    private static final String PING_URL = "https://clients3.google.com/generate_204";
-    private static final int TIMEOUT_MS = 3000;
-    private static final int CHECK_INTERVAL_SEC = 5;
+    private static final String PING_URL = "https://api.scamusica.com/";
+    private static final int TIMEOUT_MS = 8000;
+    private static final int CHECK_INTERVAL_SEC = 15;
 
     private NetworkMonitor() {}
 
@@ -75,6 +78,17 @@ public class NetworkMonitor {
 
     private void checkConnectivity() {
         boolean result = pingServer();
+
+        if (result) {
+            failureCount = 0;
+        } else {
+            failureCount++;
+            if (failureCount < FAILURE_THRESHOLD) {
+                AppLogger.log("[NetworkMonitor] Ping failed (" + failureCount + "/" + FAILURE_THRESHOLD + "), waiting...");
+                return;
+            }
+        }
+
         Platform.runLater(() -> {
             if (online.get() != result) {
                 online.set(result);

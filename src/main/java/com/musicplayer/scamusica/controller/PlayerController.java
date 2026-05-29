@@ -61,6 +61,12 @@ public class PlayerController extends Application {
     private File currentTempFile = null;
     private Thread queueWorkerThread = null;
 
+    // Class ke top pe ye fields add karo (jahan aur fields hain)
+    private final List<String> playlistMaster = new ArrayList<>();
+    private final javafx.collections.ObservableList<String> playlistViewItems =
+            FXCollections.observableArrayList();
+    private final String[] playlistCurrent = new String[1];
+
     private final PlayerSidebar sidebarUtil = new PlayerSidebar();
     private final PlayerHeader headerUtil = new PlayerHeader();
     private final PlayerDropdown dropdownUtil = new PlayerDropdown();
@@ -142,10 +148,8 @@ public class PlayerController extends Application {
         languageBox.getStyleClass().add("language-selector");
         rightMeta.getChildren().add(languageBox);
         BorderPane header = headerUtil.createHeader(leftMeta, logoView, rightMeta);
-
         globalAlbumHeading = albumUtil.createAlbumHeading();
         Label albumHeading = globalAlbumHeading;
-
         Label currentStyleLabel = new Label();
         currentStyleLabel.textProperty().bind(
                 LanguageManager.createStringBinding("label.currentStyle")
@@ -180,19 +184,18 @@ public class PlayerController extends Application {
                 tempList = cached;
                 AppLogger.log("[PlayerController] Using cached playlists: " + cached.size());
             } else {
-                tempList = tempPlaylist;
+                tempList = tempPlaylist; // hardcoded fallback
                 AppLogger.log("[PlayerController] No cache, using hardcoded fallback.");
             }
         }
 
-        final javafx.collections.ObservableList<String> playlistViewItems = FXCollections.observableArrayList();
-        final String[] playlistCurrent = new String[1];
-        final List<String> playlistMaster = tempList;
-
+        playlistMaster.addAll(tempList);
         playlistCurrent[0] = playlistMaster.get(0);
-        playlistViewItems.setAll(playlistMaster.stream()
-                .filter(s -> !s.equals(playlistCurrent[0]))
-                .collect(Collectors.toList()));
+        playlistViewItems.setAll(
+                playlistMaster.stream()
+                        .filter(s -> !s.equals(playlistCurrent[0]))
+                        .collect(Collectors.toList())
+        );
 
         playlistPill = dropdownUtil.createPlaylistPill(playlistCurrent[0]);
         playlistDropdownCard =
@@ -308,7 +311,6 @@ public class PlayerController extends Application {
             AppLogger.close();
 
             running = false;
-
             if (queueWorkerThread != null) {
                 queueWorkerThread.interrupt();
             }
@@ -330,7 +332,6 @@ public class PlayerController extends Application {
                 } catch (Exception ignored) {
                 }
             }
-
             if (adScheduler != null) {
                 adScheduler.stop();
             }
@@ -439,17 +440,27 @@ public class PlayerController extends Application {
 
         schedular.scheduleAtFixedRate(() -> {
             operationQueue.add(() -> {
+                if (!NetworkMonitor.getInstance().isOnline()) {
+                    AppLogger.log("[SYNC] Offline — skipping server sync");
+                    return;
+                }
                 try {
                     syncWithServer();
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
             });
-        }, 30, 60, java.util.concurrent.TimeUnit.SECONDS);
+        }, 30, 300, java.util.concurrent.TimeUnit.SECONDS);
     }
 
     private void syncWithServer() {
         AppLogger.log("[SYNC] Checking server updates for playlist: " + currentPlaylistName);
+
+        if (!NetworkMonitor.getInstance().isOnline()) {
+            AppLogger.log("[SYNC] Offline — aborting sync");
+            return;
+        }
+
         try {
             PlaylistApiService api = new PlaylistApiService();
 
@@ -488,7 +499,6 @@ public class PlayerController extends Application {
 
             AppLogger.log("[SYNC] To Add: " + toAdd);
             AppLogger.log("[SYNC] To Delete: " + toDelete);
-
             for (PlaylistTrack t : serverTracks) {
                 if (toAdd.contains(t.getId())) {
                     boolean exists;
@@ -532,6 +542,33 @@ public class PlayerController extends Application {
 
             try {
                 syncAdsFromServer();
+                try {
+                    PlaylistApiService api2 = new PlaylistApiService();
+                    List<String> serverTitles = api2.fetchPlaylistTitles();
+
+                    if (serverTitles != null && !serverTitles.isEmpty()) {
+                        Platform.runLater(() -> {
+                            try {
+                                if (!serverTitles.equals(playlistMaster)) {
+                                    playlistMaster.clear();
+                                    playlistMaster.addAll(serverTitles);
+
+                                    playlistViewItems.setAll(
+                                            playlistMaster.stream()
+                                                    .filter(s -> !s.equals(playlistCurrent[0]))
+                                                    .collect(Collectors.toList())
+                                    );
+
+                                    AppLogger.log("[SYNC] Playlist titles updated: " + serverTitles.size());
+                                }
+                            } catch (Exception e) {
+                                e.printStackTrace();
+                            }
+                        });
+                    }
+                } catch (Exception e) {
+                    AppLogger.log("[SYNC] Playlist title sync failed: " + e.getMessage());
+                }
             } catch (Exception e) {
                 AppLogger.log("[SYNC] Ad sync failed: " + e.getMessage());
             }
@@ -587,15 +624,11 @@ public class PlayerController extends Application {
                         + ad.getCampaignName());
 
                 Platform.runLater(() -> {
-
                     try {
 
                         if (!playQueue.isEmpty() && currentTrackIndex < playQueue.size()) {
-
                             PlaylistTrack track = playQueue.get(currentTrackIndex);
-
                             globalTitleLabel.setText(track.getTitle());
-
                             globalAlbumHeading.setText(currentPlaylistName);
                         }
 
@@ -627,7 +660,6 @@ public class PlayerController extends Application {
                 Platform.runLater(() -> {
                     try {
                         if (!playQueue.isEmpty() && currentTrackIndex < playQueue.size()) {
-
                             PlaylistTrack track = playQueue.get(currentTrackIndex);
 
                             String baseDownloadDir = System.getProperty("user.home")
@@ -656,7 +688,9 @@ public class PlayerController extends Application {
                                                         long savedTime = adPlayer.getSavedSongTime();
                                                         AppLogger.log("[PLAYER] Restoring position: " + savedTime);
                                                         vlcPlayer.controls().setTime(savedTime);
-                                                    } catch (Exception e) { e.printStackTrace(); }
+                                                    } catch (Exception e) {
+                                                        e.printStackTrace();
+                                                    }
                                                 });
                                             }, 1500, TimeUnit.MILLISECONDS);
                                         });
@@ -673,7 +707,9 @@ public class PlayerController extends Application {
                                             long savedTime = adPlayer.getSavedSongTime();
                                             AppLogger.log("[PLAYER] Restoring position: " + savedTime);
                                             vlcPlayer.controls().setTime(savedTime);
-                                        } catch (Exception e) { e.printStackTrace(); }
+                                        } catch (Exception e) {
+                                            e.printStackTrace();
+                                        }
                                     });
                                 }, 1500, TimeUnit.MILLISECONDS);
                             } else {
@@ -702,7 +738,6 @@ public class PlayerController extends Application {
             AppLogger.log("[PlayerController] Total ads = " + allAds.size());
 
             for (Ad ad : allAds) {
-
                 AppLogger.log("==============");
                 AppLogger.log("Campaign: " + ad.getCampaignName());
                 AppLogger.log("ScheduleType: " + ad.getScheduleType());
@@ -729,7 +764,6 @@ public class PlayerController extends Application {
             @Override
             public void onAdsReady(List<Ad> ads) {
                 AppLogger.log("[AdScheduler] " + ads.size() + " ads due to play");
-
                 if (adPlayer != null) {
                     adPlayer.queueAds(ads);
                 }
@@ -745,6 +779,12 @@ public class PlayerController extends Application {
     }
 
     private void syncAdsFromServer() throws Exception {
+
+        if (!NetworkMonitor.getInstance().isOnline()) {
+            AppLogger.log("[SYNC] Offline — skipping ad sync");
+            return;
+        }
+
         PlaylistApiService api = new PlaylistApiService();
         List<Ad> serverAds = api.fetchAds();
 
@@ -906,11 +946,37 @@ public class PlayerController extends Application {
             PlaylistApiService playlistApiService = new PlaylistApiService();
 
             List<PlaylistTrack> fetchedTracks = playlistApiService.fetchTracksForGenre(playlistName);
+            List<Integer> downloadSeq = playlistApiService.fetchDownloadSequenceForGenre(playlistName);
+
+            if (downloadSeq == null) downloadSeq = new ArrayList<>();
 
             if (fetchedTracks != null && !fetchedTracks.isEmpty()) {
-                playQueue.addAll(fetchedTracks);
+                if (!downloadSeq.isEmpty()) {
+                    Map<Integer, PlaylistTrack> trackMap = new HashMap<>();
+                    for (PlaylistTrack t : fetchedTracks) {
+                        trackMap.put(t.getId(), t);
+                    }
 
-                java.util.Collections.shuffle(playQueue);
+                    List<PlaylistTrack> reorderedQueue = new ArrayList<>();
+                    for (Integer id : downloadSeq) {
+                        if (trackMap.containsKey(id)) {
+                            reorderedQueue.add(trackMap.get(id));
+                        }
+                    }
+
+                    Set<Integer> seenIds = new HashSet<>(downloadSeq);
+                    for (PlaylistTrack t : fetchedTracks) {
+                        if (!seenIds.contains(t.getId())) {
+                            reorderedQueue.add(t);
+                        }
+                    }
+
+                    playQueue.addAll(reorderedQueue);
+                } else {
+                    List<PlaylistTrack> shuffled = new ArrayList<>(fetchedTracks);
+                    java.util.Collections.shuffle(shuffled);
+                    playQueue.addAll(shuffled);
+                }
             }
 
             recomputeGlobalCountAndUpdateUI();
@@ -920,8 +986,18 @@ public class PlayerController extends Application {
                 downloadManager = null;
             }
 
-            List<Integer> downloadSeq = playlistApiService.fetchDownloadSequenceForGenre(playlistName);
-            if (downloadSeq == null) downloadSeq = new ArrayList<>();
+            if (!playQueue.isEmpty() && albumImageView != null) {
+                String firstImgUrl = playQueue.get(0).getAlbumImageUrl();
+                if (firstImgUrl != null && !firstImgUrl.trim().isEmpty()) {
+                    Platform.runLater(() -> {
+                        try {
+                            albumImageView.setImage(null);
+                            albumImageView.setImage(new Image(firstImgUrl, true));
+                        } catch (Exception ignored) {
+                        }
+                    });
+                }
+            }
 
             currentGenreTotalFiles = downloadSeq.size();
 
@@ -1170,7 +1246,6 @@ public class PlayerController extends Application {
 
         PlaylistTrack track = playQueue.get(currentTrackIndex);
         PlaybackHistoryLogger.logSong(track);
-
         AppLogger.log("[PLAYER][PLAY] " + track.getTitle() + " (ID: " + track.getId() + ")");
 
         if (albumImageView != null) {
@@ -1263,40 +1338,40 @@ public class PlayerController extends Application {
                         });
 
                     } catch (Exception e) {
-                    AppLogger.log("[PLAYER] Decryption failed for song-" + track.getId()
-                            + ", file corrupted. Deleting and streaming from URL. Error: " + e.getMessage());
-                    encryptedFile.delete();
+                        AppLogger.log("[PLAYER] Decryption failed for song-" + track.getId()
+                                + ", file corrupted. Deleting and streaming from URL. Error: " + e.getMessage());
+                        encryptedFile.delete();
 
 
-                    if (NetworkMonitor.getInstance().isOnline()) {
-                        Platform.runLater(() -> {
-                            AppLogger.log("[PLAYER] Falling back to stream: " + fallbackUrl);
-                            vlcPlayer.media().play(fallbackUrl);
-                            if (!vlcHandlersAttached) {
-                                attachVlcHandlers(albumHeading, titleLabel, progressSlider,
-                                        leftTime, rightTime, controlsWrapper, bottomBar, downloadLabel, autoPlay);
-                                vlcHandlersAttached = true;
-                            }
-                        });
-                    } else {
-                        AppLogger.log("[PLAYER] Offline — cannot stream fallback for song-" + track.getId() + ", skipping to next.");
-                        Platform.runLater(() -> {
-                            try {
-                                playNextTrack(albumHeading, titleLabel, progressSlider,
-                                        leftTime, rightTime, controlsWrapper, bottomBar, downloadLabel);
-                            } catch (Exception ex) {
-                                ex.printStackTrace();
-                            }
-                        });
+                        if (NetworkMonitor.getInstance().isOnline()) {
+                            Platform.runLater(() -> {
+                                AppLogger.log("[PLAYER] Falling back to stream: " + fallbackUrl);
+                                vlcPlayer.media().play(fallbackUrl);
+                                if (!vlcHandlersAttached) {
+                                    attachVlcHandlers(albumHeading, titleLabel, progressSlider,
+                                            leftTime, rightTime, controlsWrapper, bottomBar, downloadLabel, autoPlay);
+                                    vlcHandlersAttached = true;
+                                }
+                            });
+                        } else {
+                            AppLogger.log("[PLAYER] Offline — cannot stream fallback for song-" + track.getId() + ", " +
+                                    "skipping to next.");
+                            Platform.runLater(() -> {
+                                try {
+                                    playNextTrack(albumHeading, titleLabel, progressSlider,
+                                            leftTime, rightTime, controlsWrapper, bottomBar, downloadLabel);
+                                } catch (Exception ex) {
+                                    ex.printStackTrace();
+                                }
+                            });
+                        }
                     }
-                }
                 });
                 decryptThread.setDaemon(true);
                 decryptThread.setPriority(Thread.MAX_PRIORITY);
                 decryptThread.start();
 
                 return;
-
             }
 
         } catch (Exception e) {
@@ -1637,14 +1712,13 @@ public class PlayerController extends Application {
         }
     }
 
-    // For Windows
     private File decryptToTemp(File encryptedFile) throws Exception {
         File tempDir = new File(System.getProperty("user.home")
                 + File.separator + ".scamusica"
                 + File.separator + "temp");
         tempDir.mkdirs();
         File tempFile = new File(tempDir, "play_" + System.currentTimeMillis() + ".mp3");
-        tempFile.deleteOnExit(); // ✅ Same as before
+        tempFile.deleteOnExit();
 
         try (FileInputStream fis = new FileInputStream(encryptedFile);
              CipherInputStream cis = CryptoUtil.decrypt(fis);
