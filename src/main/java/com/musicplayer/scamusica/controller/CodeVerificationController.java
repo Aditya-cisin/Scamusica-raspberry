@@ -46,11 +46,12 @@ public class CodeVerificationController extends Application {
             setOnlineStatus(status);
         });
         monitor.start();
-
+        // UI Elements
         root = new BorderPane();
-
+        // Load the background image
         Image background = new Image(getClass().getResource("/images/background.jpg").toExternalForm()); // Path to background image
 
+        // Create BackgroundImage and BackgroundSize
         BackgroundSize backgroundSize = new BackgroundSize(
                 BackgroundSize.AUTO, BackgroundSize.AUTO, // Width and height
                 true, false, // Contain and Cover
@@ -64,7 +65,7 @@ public class CodeVerificationController extends Application {
                 BackgroundPosition.CENTER,
                 backgroundSize
         );
-
+        // Create Background and set it to the BorderPane
         root.setBackground(new Background(backgroundImage));
 
         header = new HBox(15);
@@ -129,104 +130,292 @@ public class CodeVerificationController extends Application {
 
         Text messageText = new Text();
         messageText.setFill(Color.RED);
-
-        VBox loginBox = new VBox(10);
+        // Layout
+        VBox loginBox = new VBox(10); // Spacing of 10 pixels
         loginBox.setAlignment(Pos.CENTER_LEFT);
         loginBox.setPrefSize(150, 200);
         loginBox.setMaxSize(Region.USE_PREF_SIZE, Region.USE_PREF_SIZE);
         loginBox.setStyle("-fx-background-color: white;"+
                 "-fx-text-fill: black; " +
                 "-fx-background-radius: 20;");
-        loginBox.setPadding(new Insets(20));
+        loginBox.setPadding(new Insets(20)); // Padding around the layout
         loginBox.getChildren().addAll(
                 passwordLabel, passwordField,
                 loginButton, messageText);
 
         root.setCenter(loginBox);
 
-        loginButton.setOnAction(event -> {
-            if(!SessionManager.isUserLoggedIn()) {
-                if(onlineStatus) {
-                    String enteredPassword = passwordField.getText();
 
-                    if (enteredPassword.isEmpty()) {
-                        messageText.textProperty().bind(LanguageManager.createStringBinding("text.codeError"));
-                        return;
-                    }
+        // Event Handling
+        /*loginButton.setOnAction(event -> {
 
-                    loginButton.setDisable(true);
-                    messageText.textProperty().bind(LanguageManager.createStringBinding("text.verify"));
-                    messageText.setFill(Color.GREEN);
+                String enteredPassword = passwordField.getText();
 
-                    new Thread(() -> {
-                        try {
-                            client = HttpClient.newHttpClient();
+                if (enteredPassword.equals(CORRECT_PASSCODE)) {
+                    messageText.setText("Player Activated successful!");
+                    PlayerController controller = new PlayerController();
+                    controller.start(primaryStage);
+                    // Here, you would typically navigate to another scene or window
+                } else {
+                    if(enteredPassword.isEmpty())
+                        messageText.setText("Please enter the code");
 
-                            String deviceId = DeviceFingerprint.getFingerprint();
-
-                            String requestBody = "{"
-                                    + "\"licenseCode\": \"" + enteredPassword + "\","
-                                    + "\"deviceId\": \"" + deviceId + "\""
-                                    + "}";
-
-                            HttpRequest request = HttpRequest.newBuilder()
-                                    .uri(URI.create(Utility.BASE_URL.get() + Utility.VERIFY_LICENSE_CODE.get()))
-                                    .timeout(Duration.ofSeconds(8))
-                                    .header("Content-Type", "application/json")
-                                    .POST(HttpRequest.BodyPublishers.ofString(requestBody))
-                                    .build();
-
-                            HttpResponse<String> response =
-                                    client.send(request, HttpResponse.BodyHandlers.ofString());
-
-                            ObjectMapper mapper = new ObjectMapper();
-                            JsonNode jsonNode = mapper.readTree(response.body());
-                            boolean success = jsonNode.get("success").asBoolean();
-                            String message = jsonNode.get("message").asText();
-                            if (success) {
-                                Integer userId = jsonNode.get("playerId").asInt();
-                                SessionManager.saveToken(jsonNode.get("token").asText(), userId, LanguageManager.getLangCode());
-
-                                Platform.runLater(() -> {
-                                    PlayerController controller = new PlayerController();
-                                    controller.start(primaryStage);
-                                });
-
-                            } else {
-                                Platform.runLater(() -> {
-                                    messageText.setFill(Color.RED);
-                                    if(message.contains("This license is already registered to another device")){
-                                        messageText.textProperty().bind(LanguageManager.createStringBinding("text.codeAlreadyActivated"));
-                                    }else{
-                                    messageText.textProperty().bind(LanguageManager.createStringBinding("text.activationError"));
-                                    }
-                                });
-                            }
-
-                        } catch (Exception e) {
-                            Platform.runLater(() -> {
-                                messageText.setFill(Color.RED);
-                                System.err.println("error: " + e.getMessage());
-                                messageText.textProperty().bind(LanguageManager.createStringBinding("text.activationError"));
-                            });
-
-                        } finally {
-                            Platform.runLater(() -> loginButton.setDisable(false));
-                        }
-
-                    }).start();
-                }else{
-                    Platform.runLater(() -> {
-                        messageText.setFill(Color.RED);
-                        messageText.textProperty().bind(LanguageManager.createStringBinding("text.internetError"));
-                    });
+                    else
+                        messageText.setText("Activation failed. Invalid Code");
                 }
-            }else{
+
+        });*/
+//        loginButton.setOnAction(event -> {
+//            if(!SessionManager.isUserLoggedIn()) {
+//                if(onlineStatus) {
+//                    String enteredPassword = passwordField.getText();
+//
+//                    if (enteredPassword.isEmpty()) {
+//                        messageText.textProperty().bind(LanguageManager.createStringBinding("text.codeError"));
+//                        return;
+//                    }
+//
+//                    // Disable button while calling API
+//                    loginButton.setDisable(true);
+//                    messageText.textProperty().bind(LanguageManager.createStringBinding("text.verify"));
+//                    messageText.setFill(Color.GREEN);
+//
+//                    // Run API call in background thread (important for JavaFX)
+//                    new Thread(() -> {
+//                        try {
+//                            // Create HTTP client
+//                          //  client = HttpClient.newHttpClient();
+//                            try {
+//                                javax.net.ssl.TrustManagerFactory tmf = javax.net.ssl.TrustManagerFactory
+//                                        .getInstance(javax.net.ssl.TrustManagerFactory.getDefaultAlgorithm());
+//                                java.security.KeyStore ks = java.security.KeyStore.getInstance("JKS");
+//                                java.io.File cacerts = new java.io.File(
+//                                        System.getProperty("java.home") + "/lib/security/cacerts");
+//                                try (java.io.FileInputStream fis = new java.io.FileInputStream(cacerts)) {
+//                                    ks.load(fis, "changeit".toCharArray());
+//                                }
+//                                tmf.init(ks);
+//                                javax.net.ssl.SSLContext sslContext = javax.net.ssl.SSLContext.getInstance("TLS");
+//                                sslContext.init(null, tmf.getTrustManagers(), null);
+//                                client = HttpClient.newBuilder().sslContext(sslContext).build();
+//                            } catch (Exception sslEx) {
+//                                // fallback — default client
+//                                client = HttpClient.newHttpClient();
+//                            }
+//
+//                            // system identification id for no cloning
+//                            String deviceId = DeviceFingerprint.getFingerprint();
+//                            // JSON body
+//                            String requestBody = "{"
+//                                    + "\"licenseCode\": \"" + enteredPassword + "\","
+//                                    + "\"deviceId\": \"" + deviceId + "\""
+//                                    + "}";
+//                            // String jsonBody = "{ \"licenseCode\": \"" + enteredPassword + "\" }";
+//                            HttpRequest request = HttpRequest.newBuilder()
+//                                    .uri(URI.create(Utility.BASE_URL.get() + Utility.VERIFY_LICENSE_CODE.get()))
+//                                    .timeout(Duration.ofSeconds(8))
+//                                    .header("Content-Type", "application/json")
+//                                    .POST(HttpRequest.BodyPublishers.ofString(requestBody))
+//                                    .build();
+//                            // Send request
+//                            HttpResponse<String> response =
+//                                    client.send(request, HttpResponse.BodyHandlers.ofString());
+//                            // Parse response
+//                            ObjectMapper mapper = new ObjectMapper();
+//                            JsonNode jsonNode = mapper.readTree(response.body());
+//                            boolean success = jsonNode.get("success").asBoolean();
+//                            String message = jsonNode.get("message").asText();
+//                            if (success) {
+//                                Integer userId = jsonNode.get("playerId").asInt();
+//                                String token = jsonNode.get("token").asText();
+//                                String langCode = LanguageManager.getLangCode();
+//                                if (langCode == null) langCode = "en";
+//                                SessionManager.saveToken(token, userId, langCode);
+//
+//                                Platform.runLater(() -> {
+//                                    // YOUR EXISTING NAVIGATION – unchanged
+//                                    PlayerController controller = new PlayerController();
+//                                    controller.start(primaryStage);
+//                                });
+//
+//                            } else {
+//                                Platform.runLater(() -> {
+//                                    messageText.setFill(Color.RED);
+//                                    if(message.contains("This license is already registered to another device")){
+//                                        messageText.textProperty().bind(LanguageManager.createStringBinding("text.codeAlreadyActivated"));
+//                                    }else{
+//                                        messageText.textProperty().bind(LanguageManager.createStringBinding("text.activationError"));
+//                                    }
+//                                });
+//                            }
+//
+//                        } catch (Exception e) {
+//                            Platform.runLater(() -> {
+//                                messageText.setFill(Color.RED);
+//                                System.err.println("error: " + e.getMessage());
+//                                messageText.textProperty().bind(LanguageManager.createStringBinding("text.activationError"));
+//                            });
+//
+//                        } finally {
+//                            Platform.runLater(() -> loginButton.setDisable(false));
+//                        }
+//
+//                    }).start();
+//                }else{
+//                    Platform.runLater(() -> {
+//                        messageText.setFill(Color.RED);
+//                        messageText.textProperty().bind(LanguageManager.createStringBinding("text.internetError"));
+//                    });
+//                }
+//            }else{
+//                // YOUR EXISTING NAVIGATION – unchanged
+//                PlayerController controller = new PlayerController();
+//                controller.start(primaryStage);
+//            }
+//        });
+        loginButton.setOnAction(event -> {
+            String existingToken = SessionManager.loadToken();
+
+            // ✅ CASE 1: Valid token hai — seedha player open karo
+            if (existingToken != null && !existingToken.isEmpty()
+                    && !SessionManager.isTokenExpired(existingToken)) {
                 PlayerController controller = new PlayerController();
                 controller.start(primaryStage);
+                return;
+            }
+
+            // ✅ CASE 2: Token hai but expire ho gaya — clear karo, user ko batao
+            if (existingToken != null && SessionManager.isTokenExpired(existingToken)) {
+                SessionManager.clearToken();
+                messageText.textProperty().unbind();
+                messageText.setFill(Color.ORANGE);
+                messageText.textProperty().bind(
+                        LanguageManager.createStringBinding("text.sessionExpired")
+                );
+                return;
+            }
+
+            // ✅ CASE 3: Token nahi hai — fresh login
+            if (onlineStatus) {
+                String enteredPassword = passwordField.getText();
+
+                if (enteredPassword.isEmpty()) {
+                    messageText.textProperty().bind(
+                            LanguageManager.createStringBinding("text.codeError")
+                    );
+                    return;
+                }
+
+                loginButton.setDisable(true);
+                messageText.textProperty().bind(
+                        LanguageManager.createStringBinding("text.verify")
+                );
+                messageText.setFill(Color.GREEN);
+
+                new Thread(() -> {
+                    try {
+                        // ✅ Tera SSL wala code intact
+                        try {
+                            javax.net.ssl.TrustManagerFactory tmf = javax.net.ssl.TrustManagerFactory
+                                    .getInstance(javax.net.ssl.TrustManagerFactory.getDefaultAlgorithm());
+                            java.security.KeyStore ks = java.security.KeyStore.getInstance("JKS");
+                            java.io.File cacerts = new java.io.File(
+                                    System.getProperty("java.home") + "/lib/security/cacerts");
+                            try (java.io.FileInputStream fis = new java.io.FileInputStream(cacerts)) {
+                                ks.load(fis, "changeit".toCharArray());
+                            }
+                            tmf.init(ks);
+                            javax.net.ssl.SSLContext sslContext = javax.net.ssl.SSLContext.getInstance("TLS");
+                            sslContext.init(null, tmf.getTrustManagers(), null);
+                            client = HttpClient.newBuilder().sslContext(sslContext).build();
+                        } catch (Exception sslEx) {
+                            client = HttpClient.newHttpClient();
+                        }
+
+                        String deviceId = DeviceFingerprint.getFingerprint();
+
+                        String requestBody = "{"
+                                + "\"licenseCode\": \"" + enteredPassword + "\","
+                                + "\"deviceId\": \"" + deviceId + "\""
+                                + "}";
+
+                        HttpRequest request = HttpRequest.newBuilder()
+                                .uri(URI.create(Utility.BASE_URL.get() + Utility.VERIFY_LICENSE_CODE.get()))
+                                .timeout(Duration.ofSeconds(8))
+                                .header("Content-Type", "application/json")
+                                .POST(HttpRequest.BodyPublishers.ofString(requestBody))
+                                .build();
+
+                        HttpResponse<String> response =
+                                client.send(request, HttpResponse.BodyHandlers.ofString());
+
+                        ObjectMapper mapper = new ObjectMapper();
+                        JsonNode jsonNode = mapper.readTree(response.body());
+                        boolean success = jsonNode.get("success").asBoolean();
+                        String message = jsonNode.get("message").asText();
+
+                        if (success) {
+                            Integer userId = jsonNode.get("playerId").asInt();
+                            String token = jsonNode.get("token").asText();
+                            String langCode = LanguageManager.getLangCode();
+                            if (langCode == null) langCode = "en";
+                            SessionManager.saveToken(token, userId, langCode);
+
+                            Platform.runLater(() -> {
+                                PlayerController controller = new PlayerController();
+                                controller.start(primaryStage);
+                            });
+
+                        } else {
+                            Platform.runLater(() -> {
+                                messageText.setFill(Color.RED);
+                                if (message.contains("This license is already registered to another device")) {
+                                    messageText.textProperty().bind(
+                                            LanguageManager.createStringBinding("text.codeAlreadyActivated")
+                                    );
+                                } else {
+                                    messageText.textProperty().bind(
+                                            LanguageManager.createStringBinding("text.activationError")
+                                    );
+                                }
+                            });
+                        }
+
+                    } catch (Exception e) {
+                        Platform.runLater(() -> {
+                            messageText.setFill(Color.RED);
+                            System.err.println("error: " + e.getMessage());
+                            messageText.textProperty().bind(
+                                    LanguageManager.createStringBinding("text.activationError")
+                            );
+                        });
+                    } finally {
+                        Platform.runLater(() -> loginButton.setDisable(false));
+                    }
+                }).start();
+
+            } else {
+                Platform.runLater(() -> {
+                    messageText.setFill(Color.RED);
+                    messageText.textProperty().bind(
+                            LanguageManager.createStringBinding("text.internetError")
+                    );
+                });
             }
         });
 
+
+       /* // Bottom Bar
+        HBox bottomBar = new HBox(30);
+        bottomBar.setPadding(new Insets(20, 80, 20, 80));
+        bottomBar.setAlignment(Pos.CENTER);
+        bottomBar.setStyle("-fx-background-color: transparent;");
+
+        Label version= new Label("Version 11 Scamusica@2025");
+        version.setTextFill(Color.WHITE);
+        bottomBar.getChildren().add(version);
+        root.setBottom(bottomBar);*/
+        // Scene and Stage setup
         Scene scene = new Scene(root, 960, 600);
         primaryStage.setScene(scene);
         primaryStage.titleProperty().bind(
@@ -236,12 +425,25 @@ public class CodeVerificationController extends Application {
         primaryStage.setMinWidth(960);
         primaryStage.show();
 
+       /* Platform.runLater(() -> {
+            // delay start so network + SSL are ready
+            new Thread(() -> {
+                try {
+                    Thread.sleep(2000);
+                } catch (InterruptedException ignored) {}
+                monitor.start();
+            }).start();
+        });*/
     }
     private void setOnlineStatus(ConnectivityMonitor.Status status) {
+
+        // FIRST real update only
         if (status == ConnectivityMonitor.Status.ONLINE) {
             onlineStatus=true;
+
         } else {
             onlineStatus=false;
+
         }
     }
     public static void reloadUI() {

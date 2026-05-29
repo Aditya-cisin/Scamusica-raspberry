@@ -2,6 +2,7 @@ package com.musicplayer.scamusica.manager;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.musicplayer.scamusica.util.AppLogger;
 import com.musicplayer.scamusica.util.EncryptionUtil;
 
 import java.io.File;
@@ -10,7 +11,7 @@ import java.io.FileOutputStream;
 import java.util.Properties;
 
 public class SessionManager {
-      private static final String CONFIG_DIR = getConfigDir();
+    private static final String CONFIG_DIR = getConfigDir();
     private static final String CONFIG_FILE = CONFIG_DIR + File.separator + "session.properties";
 
     private static String getConfigDir() {
@@ -43,7 +44,7 @@ public class SessionManager {
             properties.setProperty("language", language);
 
             try(FileOutputStream out = new FileOutputStream(CONFIG_FILE)){
-            properties.store(out, "Scamusica Session");
+                properties.store(out, "Scamusica Session");
             }
 
         } catch (Exception e) {
@@ -52,24 +53,53 @@ public class SessionManager {
     }
 
     // Load token from file
+//    public static String loadToken() {
+//        try {
+//            File file = new File(CONFIG_FILE);
+//            if (!file.exists()) return null;
+//
+//            Properties properties = new Properties();
+//            properties.load(new FileInputStream(file));
+//
+//            String encryptedToken = properties.getProperty("token");
+//            if (encryptedToken == null) return null;
+//
+//            return EncryptionUtil.decrypt(encryptedToken);
+//
+//        } catch (Exception e) {
+//            e.printStackTrace();
+//            return null;
+//        }
+//
+//    }
+
     public static String loadToken() {
         try {
             File file = new File(CONFIG_FILE);
-            if (!file.exists()) return null;
+            if (!file.exists()) {
+                AppLogger.log("[SessionManager] session.properties not found at: " + CONFIG_FILE);
+                return null;
+            }
 
             Properties properties = new Properties();
-            properties.load(new FileInputStream(file));
+            try (FileInputStream fis = new FileInputStream(file)) {
+                properties.load(fis);
+            }
 
             String encryptedToken = properties.getProperty("token");
-            if (encryptedToken == null) return null;
+            if (encryptedToken == null) {
+                AppLogger.log("[SessionManager] 'token' key missing in properties file");
+                return null;
+            }
 
-            return EncryptionUtil.decrypt(encryptedToken);
+            String token = EncryptionUtil.decrypt(encryptedToken);
+            AppLogger.log("[SessionManager] Token loaded, expired=" + isTokenExpired(token));
+            return token;
 
         } catch (Exception e) {
-             e.printStackTrace();
+            AppLogger.log("[SessionManager] loadToken FAILED: " + e.getMessage());
             return null;
         }
-        
     }
 
     public static Integer getUserId() {
@@ -86,7 +116,7 @@ public class SessionManager {
             return Integer.valueOf(EncryptionUtil.decrypt(encryptedToken));
 
         } catch (Exception e) {
-             e.printStackTrace();
+            e.printStackTrace();
             return null;
         }
 
@@ -106,7 +136,7 @@ public class SessionManager {
             return language;
 
         } catch (Exception e) {
-             e.printStackTrace();
+            e.printStackTrace();
             return "en";
         }
 
@@ -138,18 +168,29 @@ public class SessionManager {
             properties.setProperty("language", language);
 
             // Save back to file
-           try( FileOutputStream out = new FileOutputStream(CONFIG_FILE)){
-            properties.store(out, "Scamusica Session");
-           }
+            try( FileOutputStream out = new FileOutputStream(CONFIG_FILE)){
+                properties.store(out, "Scamusica Session");
+            }
 
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
     // Is token present & valid?
+//    public static boolean isUserLoggedIn() {
+//        String token = loadToken();
+//        return token != null && !token.isEmpty() && !isTokenExpired(token);
+//    }
+
     public static boolean isUserLoggedIn() {
-        String token = loadToken();
-        return token != null && !token.isEmpty() && !isTokenExpired(token);
+        try {
+            String token = loadToken();
+            if (token == null || token.isEmpty()) return false;
+            return !isTokenExpired(token);
+        } catch (Exception e) {
+            AppLogger.log("[SessionManager] isUserLoggedIn check failed: " + e.getMessage());
+            return false;
+        }
     }
 
     // JWT Expiration check
