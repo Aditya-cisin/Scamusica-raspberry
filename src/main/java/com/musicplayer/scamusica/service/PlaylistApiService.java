@@ -66,9 +66,6 @@ public class PlaylistApiService {
         return JsonParser.parseString(response).getAsJsonObject();
     }
 
-    // ════════════════════════════════════════════════════════════════════════
-    // CHANGE 1 — fetchPlaylistTitles: success pe cache save, fail pe cache load
-    // ════════════════════════════════════════════════════════════════════════
     public List<String> fetchPlaylistTitles() throws Exception {
         try {
             JsonObject root = fetchRootJson();
@@ -99,7 +96,6 @@ public class PlaylistApiService {
 
             System.out.println("[PlaylistApiService] Playlists from API: " + titles);
 
-            // ✅ SUCCESS — cache mein save karo
             if (!titles.isEmpty()) {
                 OfflineCache.savePlaylistTitles(titles);
             }
@@ -107,20 +103,16 @@ public class PlaylistApiService {
             return titles;
 
         } catch (Exception e) {
-            // ❌ FAIL — cache se load karo
             AppLogger.log("[PlaylistApiService] fetchPlaylistTitles failed, loading from cache: " + e.getMessage());
             List<String> cached = OfflineCache.loadPlaylistTitles();
             if (!cached.isEmpty()) {
                 AppLogger.log("[PlaylistApiService] Using cached titles: " + cached.size());
                 return cached;
             }
-            throw e; // cache bhi nahi hai toh exception do
+            throw e;
         }
     }
 
-    // ════════════════════════════════════════════════════════════════════════
-    // CHANGE 2 — fetchTracksForGenre: success pe cache save, fail pe cache load
-    // ════════════════════════════════════════════════════════════════════════
     public List<PlaylistTrack> fetchTracksForGenre(String genreTitle) throws Exception {
         try {
             List<PlaylistTrack> result = new ArrayList<>();
@@ -166,13 +158,23 @@ public class PlaylistApiService {
                         folderTitle = styleObj.get("title").getAsString();
                     }
 
+                    String albumImg = null;
+
+                    if (styleObj.has("album_img")
+                            && !styleObj.get("album_img").isJsonNull()) {
+
+                        albumImg = styleObj.get("album_img").getAsString();
+
+                        AppLogger.log("[TRACK] Style album_img = " + albumImg);
+                    }
+
                     if (!styleObj.has("songs") || !styleObj.get("songs").isJsonArray()) continue;
                     JsonArray songsArr = styleObj.getAsJsonArray("songs");
 
                     List<PlaylistTrack> folderTracks = new ArrayList<>();
                     for (JsonElement songEl : songsArr) {
                         if (!songEl.isJsonObject()) continue;
-                        PlaylistTrack track = parseSongToTrack(songEl.getAsJsonObject(), commonPath, folderTitle);
+                        PlaylistTrack track = parseSongToTrack(songEl.getAsJsonObject(), commonPath, folderTitle, albumImg);
                         if (track != null) {
                             folderTracks.add(track);
                         }
@@ -186,7 +188,6 @@ public class PlaylistApiService {
 
             System.out.println("[PlaylistApiService] Final Tracks with folder titles → " + result);
 
-            // ✅ SUCCESS — cache mein save karo
             if (!result.isEmpty()) {
                 OfflineCache.saveTracks(genreTitle, result);
             }
@@ -194,20 +195,16 @@ public class PlaylistApiService {
             return result;
 
         } catch (Exception e) {
-            // ❌ FAIL — cache se load karo
             AppLogger.log("[PlaylistApiService] fetchTracksForGenre failed, loading from cache: " + e.getMessage());
             List<PlaylistTrack> cached = OfflineCache.loadTracks(genreTitle);
             if (!cached.isEmpty()) {
                 AppLogger.log("[PlaylistApiService] Using cached tracks for: " + genreTitle);
                 return cached;
             }
-            return new ArrayList<>(); // empty return karo, crash mat karo
+            return new ArrayList<>();
         }
     }
 
-    // ════════════════════════════════════════════════════════════════════════
-    // CHANGE 3 — fetchDownloadSequenceForGenre: success pe cache save, fail pe cache load
-    // ════════════════════════════════════════════════════════════════════════
     public List<Integer> fetchDownloadSequenceForGenre(String genreTitle) throws Exception {
         try {
             List<Integer> downloadSequence = new ArrayList<>();
@@ -251,10 +248,18 @@ public class PlaylistApiService {
                     if (!styleObj.has("songs") || !styleObj.get("songs").isJsonArray()) continue;
                     JsonArray songsArr = styleObj.getAsJsonArray("songs");
 
+                    String albumImg = null;
+
+                    if (styleObj.has("album_img")
+                            && !styleObj.get("album_img").isJsonNull()) {
+
+                        albumImg = styleObj.get("album_img").getAsString();
+                    }
+
                     List<PlaylistTrack> tracks = new ArrayList<>();
                     for (JsonElement songEl : songsArr) {
                         if (!songEl.isJsonObject()) continue;
-                        PlaylistTrack track = parseSongToTrack(songEl.getAsJsonObject(), commonPath, null);
+                        PlaylistTrack track = parseSongToTrack(songEl.getAsJsonObject(), commonPath, null, albumImg);
                         if (track != null && track.getId() != null && seenIds.add(track.getId())) {
                             tracks.add(track);
                         }
@@ -272,7 +277,6 @@ public class PlaylistApiService {
 
             System.out.println("[PlaylistApiService] Download sequence for '" + genreTitle + "': " + downloadSequence);
 
-            //  SUCCESS — cache mein save karo
             if (!downloadSequence.isEmpty()) {
                 OfflineCache.saveDownloadSequence(genreTitle, downloadSequence);
             }
@@ -280,20 +284,17 @@ public class PlaylistApiService {
             return downloadSequence;
 
         } catch (Exception e) {
-            // ❌ FAIL — cache se load karo
             AppLogger.log("[PlaylistApiService] fetchDownloadSequence failed, loading from cache: " + e.getMessage());
             List<Integer> cached = OfflineCache.loadDownloadSequence(genreTitle);
             AppLogger.log("[PlaylistApiService] Using cached sequence: " + cached.size() + " items");
-            return cached; // empty bhi theek hai
+            return cached;
         }
     }
 
-    // ════════════════════════════════════════════════════════════════════════
-    // parseSongToTrack — BILKUL SAME, kuch nahi badla
-    // ════════════════════════════════════════════════════════════════════════
     private PlaylistTrack parseSongToTrack(JsonObject songObj,
                                            String commonPath,
-                                           String folderTitle) {
+                                           String folderTitle,
+                                           String albumImg) {
         if (!songObj.has("file")) {
             System.out.println("[PlaylistApiService] Song missing 'file' field, skipping.");
             return null;
@@ -351,26 +352,34 @@ public class PlaylistApiService {
             }
         }
 
-        String albumImgPath = null;
-        if (songObj.has("album_img") && !songObj.get("album_img").isJsonNull()) {
-            albumImgPath = songObj.get("album_img").getAsString();
-            if (albumImgPath.endsWith(".webp")) {
-                albumImgPath = albumImgPath.substring(0, albumImgPath.length() - 5) + ".png";
-            }
-        }
+//        String albumImgPath = null;
+//        if (songObj.has("album_img") && !songObj.get("album_img").isJsonNull()) {
+//            albumImgPath = songObj.get("album_img").getAsString();
+//            AppLogger.log("[TRACK] album_img raw = " + albumImgPath);
+//        }
+//        else {
+//            AppLogger.log("[TRACK] album_img MISSING for song: " + songObj);
+//        }
+
+        String albumImgPath = albumImg;
+
+        AppLogger.log("[TRACK] album_img from style = " + albumImgPath);
 
         String fullAlbumImgUrl = null;
         if (albumImgPath != null && !albumImgPath.trim().isEmpty()) {
             if (albumImgPath.startsWith("http://") || albumImgPath.startsWith("https://")) {
                 fullAlbumImgUrl = albumImgPath;
             } else {
-                fullAlbumImgUrl = Utility.BASE_URL.get() + albumImgPath;
+                fullAlbumImgUrl =
+                        Utility.BASE_URL.get()
+                                + "/"
+                                + albumImgPath.replaceFirst("^/", "");
+                AppLogger.log("FINAL IMAGE URL = " + fullAlbumImgUrl);
             }
         }
 
         return new PlaylistTrack(songId, title, fullUrl, durationSeconds, folderTitle, fullAlbumImgUrl);
     }
-
 
     public List<Ad> fetchAds() throws Exception {
         try {
