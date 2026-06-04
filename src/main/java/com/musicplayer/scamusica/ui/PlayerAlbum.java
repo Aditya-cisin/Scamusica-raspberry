@@ -7,9 +7,7 @@ import javafx.scene.Scene;
 import javafx.scene.control.Label;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
-import javafx.scene.layout.HBox;
-import javafx.scene.layout.Priority;
-import javafx.scene.layout.VBox;
+import javafx.scene.layout.*;
 import javafx.scene.shape.Rectangle;
 import org.kordamp.ikonli.javafx.FontIcon;
 
@@ -145,10 +143,12 @@ public class PlayerAlbum {
     public void bindImageSize(ImageView img, Scene scene, HBox progressRow, Label titleCentered) {
         img.fitWidthProperty().bind(Bindings.createDoubleBinding(() -> {
             double w = scene.getWidth() * 0.27;
-            if (w < 160) w = 160;
-            if (w > 520) w = 520;
-            return w;
-        }, scene.widthProperty()));
+            double h = scene.getHeight() * 0.35; // Don't exceed 35% of window height
+            double size = Math.min(w, h);
+            if (size < 120) size = 120; // Reduced min size for small screens
+            if (size > 520) size = 520;
+            return size;
+        }, scene.widthProperty(), scene.heightProperty()));
         img.fitHeightProperty().bind(img.fitWidthProperty());
         titleCentered.prefWidthProperty().bind(progressRow.widthProperty());
     }

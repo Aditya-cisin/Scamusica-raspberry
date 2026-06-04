@@ -23,6 +23,7 @@ public class AdPlayer {
 
     private final MediaPlayer vlcPlayer;
     private final AdPlaybackListener listener;
+//    private final ExecutorService executor = Executors.newSingleThreadExecutor();
 
     private final ExecutorService executor = Executors.newSingleThreadExecutor(r -> {
         Thread t = new Thread(r, "AdPlayer-Thread");
@@ -99,10 +100,24 @@ public class AdPlayer {
     private void playAdInternal(Ad ad) throws Exception {
         AppLogger.log("[AdPlayer] Preparing ad: " + ad.getCampaignName());
 
+        // Step 1: Save current song state
         try {
             savedSongTime = vlcPlayer.status().time();
         } catch (Exception ignored) {}
 
+        int originalVol = vlcPlayer.audio().volume();
+        try {
+            int steps = 20;
+            for (int i = 0; i < steps; i++) {
+                if (!isPlayingAd) break;
+                int currentVol = (int) (originalVol * (1.0 - (double) i / steps));
+                vlcPlayer.audio().setVolume(currentVol);
+                Thread.sleep(100);
+            }
+            vlcPlayer.audio().setVolume(0);
+        } catch (Exception e) {}
+
+        // Step 2: Stop current song
         Platform.runLater(() -> {
             try {
 
@@ -114,10 +129,13 @@ public class AdPlayer {
 
                 listener.onSongPaused("Ad starting");
 
+                vlcPlayer.audio().setVolume(originalVol);
+
             } catch (Exception ignored) {}
         });
         Thread.sleep(600);
 
+        // Step 3: Build ad URL
         String adUrl = buildAdUrl(ad);
         if (adUrl == null) {
             AppLogger.log("[AdPlayer] Invalid ad URL, skipping");
@@ -127,7 +145,10 @@ public class AdPlayer {
 
         AppLogger.log("[AdPlayer] Playing ad from URL: " + adUrl);
 
+        // Step 4: Play ad using CountDownLatch to wait for finish
         CountDownLatch latch = new CountDownLatch(1);
+
+        final MediaPlayerEventAdapter[] adListener = new MediaPlayerEventAdapter[1];
 
         Platform.runLater(() -> {
             try {
@@ -137,7 +158,8 @@ public class AdPlayer {
 
                 AppLogger.log("[AdPlayer] VLC PLAY RESULT = " + result);
 
-                vlcPlayer.events().addMediaPlayerEventListener(new MediaPlayerEventAdapter() {
+                // One-time listener for this ad
+                adListener[0] = new MediaPlayerEventAdapter() {
                     @Override
                     public void finished(MediaPlayer mediaPlayer) {
                         AppLogger.log("[AdPlayer] Ad finished: " + ad.getCampaignName());
@@ -151,20 +173,33 @@ public class AdPlayer {
                         vlcPlayer.events().removeMediaPlayerEventListener(this);
                         latch.countDown();
                     }
-                });
+                };
+                vlcPlayer.events().addMediaPlayerEventListener(adListener[0]);
             } catch (Exception e) {
                 AppLogger.log("[AdPlayer] Failed to start ad: " + e.getMessage());
                 latch.countDown();
             }
         });
 
+        // Step 5: Wait for ad to finish (max 10 minutes)
         boolean finished = latch.await(10, TimeUnit.MINUTES);
         AppLogger.log("[AdPlayer] Ad latch released, finished=" + finished);
 
+        // Guarantee cleanup to prevent RAM leaks
+        Platform.runLater(() -> {
+            if (adListener[0] != null) {
+                try {
+                    vlcPlayer.events().removeMediaPlayerEventListener(adListener[0]);
+                } catch (Exception ignored) {}
+            }
+        });
+
         Thread.sleep(300);
 
+        // Step 6: Ad done, notify
         Platform.runLater(() -> listener.onAdPlaybackFinished(ad));
 
+        // Step 7: Play next ad or resume song
         playNextAd();
     }
 

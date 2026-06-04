@@ -22,10 +22,15 @@ import javafx.scene.text.Text;
 import javafx.stage.Stage;
 import javafx.stage.Window;
 
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManagerFactory;
+import java.io.File;
+import java.io.FileInputStream;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.security.KeyStore;
 import java.time.Duration;
 
 public class CodeVerificationController extends Application {
@@ -276,7 +281,6 @@ public class CodeVerificationController extends Application {
         loginButton.setOnAction(event -> {
             String existingToken = SessionManager.loadToken();
 
-            // ✅ CASE 1: Valid token hai — seedha player open karo
             if (existingToken != null && !existingToken.isEmpty()
                     && !SessionManager.isTokenExpired(existingToken)) {
                 PlayerController controller = new PlayerController();
@@ -284,7 +288,6 @@ public class CodeVerificationController extends Application {
                 return;
             }
 
-            // ✅ CASE 2: Token hai but expire ho gaya — clear karo, user ko batao
             if (existingToken != null && SessionManager.isTokenExpired(existingToken)) {
                 SessionManager.clearToken();
                 messageText.textProperty().unbind();
@@ -295,7 +298,6 @@ public class CodeVerificationController extends Application {
                 return;
             }
 
-            // ✅ CASE 3: Token nahi hai — fresh login
             if (onlineStatus) {
                 String enteredPassword = passwordField.getText();
 
@@ -314,18 +316,17 @@ public class CodeVerificationController extends Application {
 
                 new Thread(() -> {
                     try {
-                        // ✅ Tera SSL wala code intact
                         try {
-                            javax.net.ssl.TrustManagerFactory tmf = javax.net.ssl.TrustManagerFactory
-                                    .getInstance(javax.net.ssl.TrustManagerFactory.getDefaultAlgorithm());
-                            java.security.KeyStore ks = java.security.KeyStore.getInstance("JKS");
-                            java.io.File cacerts = new java.io.File(
+                            TrustManagerFactory tmf = TrustManagerFactory
+                                    .getInstance(TrustManagerFactory.getDefaultAlgorithm());
+                            KeyStore ks = KeyStore.getInstance("JKS");
+                            File cacerts = new File(
                                     System.getProperty("java.home") + "/lib/security/cacerts");
-                            try (java.io.FileInputStream fis = new java.io.FileInputStream(cacerts)) {
+                            try (FileInputStream fis = new FileInputStream(cacerts)) {
                                 ks.load(fis, "changeit".toCharArray());
                             }
                             tmf.init(ks);
-                            javax.net.ssl.SSLContext sslContext = javax.net.ssl.SSLContext.getInstance("TLS");
+                            SSLContext sslContext = SSLContext.getInstance("TLS");
                             sslContext.init(null, tmf.getTrustManagers(), null);
                             client = HttpClient.newBuilder().sslContext(sslContext).build();
                         } catch (Exception sslEx) {
@@ -333,6 +334,7 @@ public class CodeVerificationController extends Application {
                         }
 
                         String deviceId = DeviceFingerprint.getFingerprint();
+                        System.out.println("Device Id : " + deviceId);
 
                         String requestBody = "{"
                                 + "\"licenseCode\": \"" + enteredPassword + "\","

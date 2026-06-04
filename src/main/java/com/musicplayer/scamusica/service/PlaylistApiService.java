@@ -13,32 +13,31 @@ import java.util.*;
 
 public class PlaylistApiService {
 
-    private static final String SONGS_URL =
-            Utility.BASE_URL.get() + Utility.API_SONGS_ENDPOINT.get();
+    private static final String SONGS_URL = Utility.BASE_URL.get() + Utility.API_SONGS_ENDPOINT.get();
 
-//    private JsonObject fetchRootJson() throws Exception {
-//        String token = SessionManager.loadToken();
-//
-//        if (token == null || token.trim().isEmpty()) {
-//            System.err.println("[PlaylistApiService] Token is null or empty");
-//            throw new IllegalStateException("Bearer token is missing");
-//        }
-//
-//        System.out.println("[PlaylistApiService] Using token: " + token);
-//
-//        Map<String, String> headers = new HashMap<>();
-//        headers.put("Authorization", "Bearer " + token);
-//        headers.put("Accept", "application/json");
-//
-//        String response = ApiClient.get(SONGS_URL, headers);
-//        System.out.println("[PlaylistApiService] Raw response : " + response);
-//
-//        if (response == null || response.isEmpty()) {
-//            throw new IllegalStateException("Empty response from API");
-//        }
-//
-//        return JsonParser.parseString(response).getAsJsonObject();
-//    }
+    // private JsonObject fetchRootJson() throws Exception {
+    // String token = SessionManager.loadToken();
+    //
+    // if (token == null || token.trim().isEmpty()) {
+    // System.err.println("[PlaylistApiService] Token is null or empty");
+    // throw new IllegalStateException("Bearer token is missing");
+    // }
+    //
+    // System.out.println("[PlaylistApiService] Using token: " + token);
+    //
+    // Map<String, String> headers = new HashMap<>();
+    // headers.put("Authorization", "Bearer " + token);
+    // headers.put("Accept", "application/json");
+    //
+    // String response = ApiClient.get(SONGS_URL, headers);
+    // System.out.println("[PlaylistApiService] Raw response : " + response);
+    //
+    // if (response == null || response.isEmpty()) {
+    // throw new IllegalStateException("Empty response from API");
+    // }
+    //
+    // return JsonParser.parseString(response).getAsJsonObject();
+    // }
 
     private JsonObject fetchRootJson() throws Exception {
         String token = SessionManager.loadToken();
@@ -84,7 +83,8 @@ public class PlaylistApiService {
             JsonArray sequences = dataObj.getAsJsonArray("sequences");
 
             for (JsonElement seqEl : sequences) {
-                if (!seqEl.isJsonObject()) continue;
+                if (!seqEl.isJsonObject())
+                    continue;
                 JsonObject seqObj = seqEl.getAsJsonObject();
                 if (seqObj.has("title") && !seqObj.get("title").isJsonNull()) {
                     String seqTitle = seqObj.get("title").getAsString();
@@ -139,18 +139,24 @@ public class PlaylistApiService {
             }
 
             for (JsonElement seqEl : sequences) {
-                if (!seqEl.isJsonObject()) continue;
+                if (!seqEl.isJsonObject())
+                    continue;
                 JsonObject seqObj = seqEl.getAsJsonObject();
 
-                if (!seqObj.has("title") || seqObj.get("title").isJsonNull()) continue;
+                if (!seqObj.has("title") || seqObj.get("title").isJsonNull())
+                    continue;
                 String seqTitle = seqObj.get("title").getAsString();
-                if (!genreTitle.equals(seqTitle)) continue;
+                if (!genreTitle.equals(seqTitle))
+                    continue;
 
-                if (!seqObj.has("styles") || !seqObj.get("styles").isJsonArray()) continue;
+                if (!seqObj.has("styles") || !seqObj.get("styles").isJsonArray())
+                    continue;
                 JsonArray styles = seqObj.getAsJsonArray("styles");
 
+                List<List<PlaylistTrack>> stylesTracks = new ArrayList<>();
                 for (JsonElement styleEl : styles) {
-                    if (!styleEl.isJsonObject()) continue;
+                    if (!styleEl.isJsonObject())
+                        continue;
                     JsonObject styleObj = styleEl.getAsJsonObject();
 
                     String folderTitle = null;
@@ -168,21 +174,35 @@ public class PlaylistApiService {
                         AppLogger.log("[TRACK] Style album_img = " + albumImg);
                     }
 
-                    if (!styleObj.has("songs") || !styleObj.get("songs").isJsonArray()) continue;
+                    if (!styleObj.has("songs") || !styleObj.get("songs").isJsonArray())
+                        continue;
                     JsonArray songsArr = styleObj.getAsJsonArray("songs");
 
                     List<PlaylistTrack> folderTracks = new ArrayList<>();
                     for (JsonElement songEl : songsArr) {
-                        if (!songEl.isJsonObject()) continue;
-                        PlaylistTrack track = parseSongToTrack(songEl.getAsJsonObject(), commonPath, folderTitle, albumImg);
+                        if (!songEl.isJsonObject())
+                            continue;
+                        PlaylistTrack track = parseSongToTrack(songEl.getAsJsonObject(), commonPath, folderTitle,
+                                albumImg);
                         if (track != null) {
                             folderTracks.add(track);
                         }
                     }
 
                     Collections.shuffle(folderTracks);
-                    result.addAll(folderTracks);
+                    stylesTracks.add(folderTracks);
                 }
+
+                boolean added;
+                do {
+                    added = false;
+                    for (List<PlaylistTrack> trackList : stylesTracks) {
+                        if (!trackList.isEmpty()) {
+                            result.add(trackList.remove(0));
+                            added = true;
+                        }
+                    }
+                } while (added);
                 break;
             }
 
@@ -231,21 +251,28 @@ public class PlaylistApiService {
             Set<Integer> seenIds = new HashSet<>();
 
             for (JsonElement seqEl : sequences) {
-                if (!seqEl.isJsonObject()) continue;
+                if (!seqEl.isJsonObject())
+                    continue;
                 JsonObject seqObj = seqEl.getAsJsonObject();
 
-                if (!seqObj.has("title") || seqObj.get("title").isJsonNull()) continue;
+                if (!seqObj.has("title") || seqObj.get("title").isJsonNull())
+                    continue;
                 String seqTitle = seqObj.get("title").getAsString();
-                if (!genreTitle.equals(seqTitle)) continue;
+                if (!genreTitle.equals(seqTitle))
+                    continue;
 
-                if (!seqObj.has("styles") || !seqObj.get("styles").isJsonArray()) continue;
+                if (!seqObj.has("styles") || !seqObj.get("styles").isJsonArray())
+                    continue;
                 JsonArray styles = seqObj.getAsJsonArray("styles");
 
+                List<List<Integer>> stylesDownloadTracks = new ArrayList<>();
                 for (JsonElement styleEl : styles) {
-                    if (!styleEl.isJsonObject()) continue;
+                    if (!styleEl.isJsonObject())
+                        continue;
                     JsonObject styleObj = styleEl.getAsJsonObject();
 
-                    if (!styleObj.has("songs") || !styleObj.get("songs").isJsonArray()) continue;
+                    if (!styleObj.has("songs") || !styleObj.get("songs").isJsonArray())
+                        continue;
                     JsonArray songsArr = styleObj.getAsJsonArray("songs");
 
                     String albumImg = null;
@@ -258,7 +285,8 @@ public class PlaylistApiService {
 
                     List<PlaylistTrack> tracks = new ArrayList<>();
                     for (JsonElement songEl : songsArr) {
-                        if (!songEl.isJsonObject()) continue;
+                        if (!songEl.isJsonObject())
+                            continue;
                         PlaylistTrack track = parseSongToTrack(songEl.getAsJsonObject(), commonPath, null, albumImg);
                         if (track != null && track.getId() != null && seenIds.add(track.getId())) {
                             tracks.add(track);
@@ -266,12 +294,25 @@ public class PlaylistApiService {
                     }
 
                     Collections.shuffle(tracks);
+                    List<Integer> styleIds = new ArrayList<>();
                     for (PlaylistTrack t : tracks) {
                         if (t.getId() != null) {
-                            downloadSequence.add(t.getId());
+                            styleIds.add(t.getId());
                         }
                     }
+                    stylesDownloadTracks.add(styleIds);
                 }
+
+                boolean added;
+                do {
+                    added = false;
+                    for (List<Integer> styleIds : stylesDownloadTracks) {
+                        if (!styleIds.isEmpty()) {
+                            downloadSequence.add(styleIds.remove(0));
+                            added = true;
+                        }
+                    }
+                } while (added);
                 break;
             }
 
@@ -352,14 +393,14 @@ public class PlaylistApiService {
             }
         }
 
-//        String albumImgPath = null;
-//        if (songObj.has("album_img") && !songObj.get("album_img").isJsonNull()) {
-//            albumImgPath = songObj.get("album_img").getAsString();
-//            AppLogger.log("[TRACK] album_img raw = " + albumImgPath);
-//        }
-//        else {
-//            AppLogger.log("[TRACK] album_img MISSING for song: " + songObj);
-//        }
+        // String albumImgPath = null;
+        // if (songObj.has("album_img") && !songObj.get("album_img").isJsonNull()) {
+        // albumImgPath = songObj.get("album_img").getAsString();
+        // AppLogger.log("[TRACK] album_img raw = " + albumImgPath);
+        // }
+        // else {
+        // AppLogger.log("[TRACK] album_img MISSING for song: " + songObj);
+        // }
 
         String albumImgPath = albumImg;
 
@@ -370,10 +411,9 @@ public class PlaylistApiService {
             if (albumImgPath.startsWith("http://") || albumImgPath.startsWith("https://")) {
                 fullAlbumImgUrl = albumImgPath;
             } else {
-                fullAlbumImgUrl =
-                        Utility.BASE_URL.get()
-                                + "/"
-                                + albumImgPath.replaceFirst("^/", "");
+                fullAlbumImgUrl = Utility.BASE_URL.get()
+                        + "/"
+                        + albumImgPath.replaceFirst("^/", "");
                 AppLogger.log("FINAL IMAGE URL = " + fullAlbumImgUrl);
             }
         }
@@ -398,7 +438,8 @@ public class PlaylistApiService {
             JsonArray adsArray = dataObj.getAsJsonArray("ads");
 
             for (JsonElement adEl : adsArray) {
-                if (!adEl.isJsonObject()) continue;
+                if (!adEl.isJsonObject())
+                    continue;
                 JsonObject adObj = adEl.getAsJsonObject();
 
                 Ad ad = new Ad();
