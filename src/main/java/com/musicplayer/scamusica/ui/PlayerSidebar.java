@@ -10,18 +10,15 @@ import com.musicplayer.scamusica.manager.SessionManager;
 import javafx.application.Platform;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
-import javafx.scene.layout.Priority;
-import javafx.scene.layout.Region;
-import javafx.scene.layout.VBox;
+import javafx.scene.layout.*;
 import javafx.stage.Stage;
 import org.kordamp.ikonli.javafx.FontIcon;
-
 import java.util.List;
 
 public class PlayerSidebar {
     /**
      * Creates a styled icon button for the sidebar with the specified icon.
-     * 
+     *
      * @param iconLiteral The icon literal from the icon font library
      * @return A styled Button with the specified icon
      */
@@ -36,7 +33,7 @@ public class PlayerSidebar {
 
     /**
      * Adds interaction logic to sidebar buttons, managing active state styling.
-     * 
+     *
      * @param buttons List of all sidebar buttons
      * @param activeButton The initially active button
      */
@@ -50,7 +47,7 @@ public class PlayerSidebar {
 
     /**
      * Creates the top section of the sidebar containing the main navigation buttons.
-     * 
+     *
      * @param headphonesButton The main navigation button
      * @return VBox containing the top section of the sidebar
      */
@@ -63,10 +60,10 @@ public class PlayerSidebar {
     /**
      * Creates a settings icon for the bottom of the sidebar.
      * Which opens a Dialog for leaving the Application
-     * 
+     *
      * @return Configured FontIcon for settings
      */
-    public FontIcon createSettingsIcon(Stage parentStage) {
+    public FontIcon createSettingsIcon(Stage parentStage, Runnable onLeaveAction) {
         FontIcon icon = new FontIcon("fas-cog");
         icon.getStyleClass().add("settings-icon");
         icon.setOnMouseClicked(e -> {
@@ -74,6 +71,10 @@ public class PlayerSidebar {
             popup.show(parentStage, new LeavingPopup.Callback() {
                 public void onYes() {
                     SessionManager.clearToken();
+
+                    if (onLeaveAction != null) {
+                        onLeaveAction.run();
+                    }
 
                     Platform.runLater(() -> {
                         try {
@@ -98,7 +99,7 @@ public class PlayerSidebar {
 
     /**
      * Assembles the complete sidebar with top and bottom sections.
-     * 
+     *
      * @param sidebarTop The top section of the sidebar
      * @param settingsIcon The settings icon for the bottom
      * @return Complete VBox containing the sidebar
