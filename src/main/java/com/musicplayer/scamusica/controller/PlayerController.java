@@ -62,8 +62,7 @@ public class PlayerController extends Application {
     private Thread queueWorkerThread = null;
 
     private final List<String> playlistMaster = new ArrayList<>();
-    private final javafx.collections.ObservableList<String> playlistViewItems =
-            FXCollections.observableArrayList();
+    private final javafx.collections.ObservableList<String> playlistViewItems = FXCollections.observableArrayList();
     private final String[] playlistCurrent = new String[1];
 
     private final PlayerSidebar sidebarUtil = new PlayerSidebar();
@@ -94,8 +93,7 @@ public class PlayerController extends Application {
             "Sequence 3",
             "Playlist Custom 1",
             "Playlist Custom 2",
-            "Playlist Custom 3"
-    );
+            "Playlist Custom 3");
 
     private DownloadManager downloadManager;
 
@@ -118,22 +116,26 @@ public class PlayerController extends Application {
     public void start(Stage primaryStage) {
 
         AppLogger.init();
+        // === TEMP CLEANUP ===
+        try {
+            File tempDir = new File(System.getProperty("user.home")
+                    + File.separator + ".scamusica"
+                    + File.separator + "temp");
+            if (tempDir.exists() && tempDir.isDirectory()) {
+                File[] files = tempDir.listFiles();
+                if (files != null) {
+                    for (File f : files) {
+                        if (f.getName().startsWith("play_") && f.getName().endsWith(".mp3")) {
+                            f.delete();
+                        }
+                    }
+                }
+            }
+        } catch (Exception ignored) {}
+
         // === NETWORK MONITOR START ===
         NetworkMonitor.getInstance().start();
         AppLogger.log("[APP] Player started");
-
-        // === TEMP CLEANUP ===
-        File tempDir = new File(System.getProperty("user.home")
-                + File.separator + ".scamusica"
-                + File.separator + "temp");
-        if (tempDir.exists() && tempDir.isDirectory()) {
-            File[] files = tempDir.listFiles();
-            if (files != null) {
-                for (File f : files) {
-                    f.delete();
-                }
-            }
-        }
 
         String appDir = System.getProperty("user.dir");
 
@@ -155,7 +157,8 @@ public class PlayerController extends Application {
             if (vlcPlayer != null) {
                 try {
                     vlcPlayer.controls().stop();
-                } catch (Exception ignored) {}
+                } catch (Exception ignored) {
+                }
             }
             if (queueWorkerThread != null) {
                 queueWorkerThread.interrupt();
@@ -172,7 +175,8 @@ public class PlayerController extends Application {
             if (downloadManager != null) {
                 try {
                     downloadManager.stop();
-                } catch (Exception ignored) {}
+                } catch (Exception ignored) {
+                }
             }
         });
         VBox sidebar = sidebarUtil.createSidebar(sidebarTop, settingsIcon);
@@ -190,8 +194,7 @@ public class PlayerController extends Application {
 
         Label currentStyleLabel = new Label();
         currentStyleLabel.textProperty().bind(
-                LanguageManager.createStringBinding("label.currentStyle")
-        );
+                LanguageManager.createStringBinding("label.currentStyle"));
 
         currentStyleLabel.getStyleClass().add("section-heading-styles");
 
@@ -232,20 +235,18 @@ public class PlayerController extends Application {
         playlistViewItems.setAll(
                 playlistMaster.stream()
                         .filter(s -> !s.equals(playlistCurrent[0]))
-                        .collect(Collectors.toList())
-        );
+                        .collect(Collectors.toList()));
 
         playlistPill = dropdownUtil.createPlaylistPill(playlistCurrent[0]);
-        playlistDropdownCard =
-                dropdownUtil.createDropdownCard(playlistViewItems, playlistCurrent, playlistMaster, playlistPill);
+        playlistDropdownCard = dropdownUtil.createDropdownCard(playlistViewItems, playlistCurrent, playlistMaster,
+                playlistPill);
 
         HBox playlistHeaderBox = dropdownUtil.createPlaylistHeaderBox(playlistPill);
 
         // New Code
         Label sequencesLabel = new Label();
         sequencesLabel.textProperty().bind(
-                LanguageManager.createStringBinding("label.sequencesTitle")
-        );
+                LanguageManager.createStringBinding("label.sequencesTitle"));
         sequencesLabel.getStyleClass().add("section-heading-sequences");
 
         // New Code
@@ -286,7 +287,8 @@ public class PlayerController extends Application {
 
         StackPane combinedBottom = new StackPane();
         bottomBar.setPickOnBounds(false);
-        combinedBottom.getChildren().addAll(controlsWrapper, bottomBar);
+        controlsWrapper.setPickOnBounds(false);
+        combinedBottom.getChildren().addAll(bottomBar, controlsWrapper);
         StackPane.setAlignment(bottomBar, Pos.CENTER);
 
         VBox contentVBox = new VBox();
@@ -338,17 +340,14 @@ public class PlayerController extends Application {
                                 controlsWrapper,
                                 bottomBar,
                                 downloadLabel,
-                                true
-                        );
+                                true);
                     } catch (URISyntaxException e) {
                         throw new RuntimeException(e);
                     }
-                }
-        );
+                });
 
         primaryStage.titleProperty().bind(
-                LanguageManager.createStringBinding("app.title")
-        );
+                LanguageManager.createStringBinding("app.title"));
         primaryStage.setScene(scene);
         primaryStage.setMinWidth(1150);
         primaryStage.setMinHeight(650);
@@ -428,8 +427,7 @@ public class PlayerController extends Application {
                         controlsWrapper,
                         bottomBar,
                         downloadLabel,
-                        true
-                );
+                        true);
 
                 setupBigPlayBehaviour(
                         albumHeading,
@@ -439,38 +437,28 @@ public class PlayerController extends Application {
                         leftTime,
                         rightTime,
                         bottomBar,
-                        downloadLabel
-                );
+                        downloadLabel);
 
             } catch (URISyntaxException e) {
                 throw new RuntimeException(e);
             }
 
-            Button forwardBtn = (Button) controlsWrapper.lookup("#forwardButton");
+            Button forwardBtn = null;
+            HBox forwardBox = null;
+            try {
+                forwardBox = (HBox) controlsWrapper.getChildren().get(2);
+                forwardBtn = (Button) forwardBox.getChildren().get(0);
+            } catch (Exception ex) {
+                forwardBtn = (Button) controlsWrapper.lookup("#forwardButton");
+            }
 
             if (forwardBtn != null) {
+                final Button finalForwardBtn = forwardBtn;
+                javafx.event.EventHandler<javafx.scene.input.MouseEvent> fwdHandler = e -> {
+                    e.consume();
+                    finalForwardBtn.getStyleClass().add("control-active");
+                    Platform.runLater(() -> finalForwardBtn.getStyleClass().remove("control-active"));
 
-//                forwardBtn.setOnAction(e -> {
-//
-//                    try {
-//
-//                        long current = vlcPlayer.status().time();
-//
-//                        long duration = vlcPlayer.status().length();
-//
-//                        long target = current + 10000;
-//
-//                        if (duration > 0 && target > duration) {
-//                            target = duration;
-//                        }
-//
-//                        vlcPlayer.controls().setTime(target);
-//
-//                    } catch (Exception ex) {
-//                        ex.printStackTrace();
-//                    }
-//                });
-                forwardBtn.setOnAction(e -> {
                     try {
                         playNextTrack(
                                 albumHeading,
@@ -480,12 +468,16 @@ public class PlayerController extends Application {
                                 rightTime,
                                 controlsWrapper,
                                 bottomBar,
-                                downloadLabel
-                        );
+                                downloadLabel);
                     } catch (Exception ex) {
                         ex.printStackTrace();
                     }
-                });
+                };
+
+                finalForwardBtn.addEventFilter(javafx.scene.input.MouseEvent.MOUSE_CLICKED, fwdHandler);
+                if (forwardBox != null) {
+                    forwardBox.addEventFilter(javafx.scene.input.MouseEvent.MOUSE_CLICKED, fwdHandler);
+                }
             }
         });
 
@@ -537,13 +529,14 @@ public class PlayerController extends Application {
             PlaylistApiService api = new PlaylistApiService();
 
             String currentPlaylist = currentPlaylistName;
-            if (currentPlaylist == null) return;
+            if (currentPlaylist == null)
+                return;
 
             List<PlaylistTrack> serverTracks = api.fetchTracksForGenre(currentPlaylist);
             AppLogger.log("[SYNC] Server tracks count: " + serverTracks.size());
 
-            if (serverTracks == null) return;
-
+            if (serverTracks == null)
+                return;
 
             List<Integer> serverIds = serverTracks.stream()
                     .map(PlaylistTrack::getId)
@@ -632,8 +625,7 @@ public class PlayerController extends Application {
                                     playlistViewItems.setAll(
                                             playlistMaster.stream()
                                                     .filter(s -> !s.equals(playlistCurrent[0]))
-                                                    .collect(Collectors.toList())
-                                    );
+                                                    .collect(Collectors.toList()));
 
                                     AppLogger.log("[SYNC] Playlist titles updated: " + serverTitles.size());
                                 }
@@ -752,7 +744,8 @@ public class PlayerController extends Application {
                                     "song-" + track.getId() + ".dat");
 
                             if (encryptedFile.exists()) {
-                                AppLogger.log("[AdPlayer] Resuming from local file: " + encryptedFile.getAbsolutePath());
+                                AppLogger
+                                        .log("[AdPlayer] Resuming from local file: " + encryptedFile.getAbsolutePath());
                                 new Thread(() -> {
                                     try {
                                         if (currentTempFile != null && currentTempFile.exists()) {
@@ -768,11 +761,12 @@ public class PlayerController extends Application {
                                             vlcPlayer.audio().setVolume(0);
                                             new Thread(() -> {
                                                 try {
-                                                    for(int i = 0; i < 50; i++) {
+                                                    for (int i = 0; i < 50; i++) {
                                                         vlcPlayer.audio().setVolume(0);
                                                         Thread.sleep(30);
                                                     }
-                                                } catch (Exception e) {}
+                                                } catch (Exception e) {
+                                                }
                                             }).start();
 
                                             vlcPlayer.media().play(tempFile.getAbsolutePath(), startTimeOpt);
@@ -789,7 +783,8 @@ public class PlayerController extends Application {
                                                             Thread.sleep(100);
                                                         }
                                                         vlcPlayer.audio().setVolume(originalVol);
-                                                    } catch (Exception e) {}
+                                                    } catch (Exception e) {
+                                                    }
                                                 }).start();
                                             }, 1500, TimeUnit.MILLISECONDS);
                                         });
@@ -806,11 +801,12 @@ public class PlayerController extends Application {
                                 vlcPlayer.audio().setVolume(0);
                                 new Thread(() -> {
                                     try {
-                                        for(int i = 0; i < 50; i++) {
+                                        for (int i = 0; i < 50; i++) {
                                             vlcPlayer.audio().setVolume(0);
                                             Thread.sleep(30);
                                         }
-                                    } catch (Exception e) {}
+                                    } catch (Exception e) {
+                                    }
                                 }).start();
 
                                 vlcPlayer.media().play(encodeMediaUrl(track.getUrl()), startTimeOpt);
@@ -827,7 +823,8 @@ public class PlayerController extends Application {
                                                 Thread.sleep(100);
                                             }
                                             vlcPlayer.audio().setVolume(originalVol);
-                                        } catch (Exception e) {}
+                                        } catch (Exception e) {
+                                        }
                                     }).start();
                                 }, 1500, TimeUnit.MILLISECONDS);
                             } else {
@@ -929,7 +926,8 @@ public class PlayerController extends Application {
         File baseDir = new File(baseDownloadDir);
 
         File[] folders = baseDir.listFiles();
-        if (folders == null) return;
+        if (folders == null)
+            return;
 
         for (File folder : folders) {
             File file = new File(folder, "song-" + id + ".dat");
@@ -947,9 +945,11 @@ public class PlayerController extends Application {
 
     private int countExistingInGenreFolder(String genreFolderPath) {
         File dir = new File(genreFolderPath);
-        if (!dir.exists() || !dir.isDirectory()) return 0;
+        if (!dir.exists() || !dir.isDirectory())
+            return 0;
         File[] files = dir.listFiles();
-        if (files == null) return 0;
+        if (files == null)
+            return 0;
         int c = 0;
         for (File f : files) {
             if (!f.isDirectory() && f.getName().startsWith("song-") && f.getName().endsWith(".dat") && f.length() > 0) {
@@ -960,10 +960,12 @@ public class PlayerController extends Application {
     }
 
     private int countExistingDownloadedFiles(File root) {
-        if (root == null || !root.exists()) return 0;
+        if (root == null || !root.exists())
+            return 0;
         int count = 0;
         File[] files = root.listFiles();
-        if (files == null) return 0;
+        if (files == null)
+            return 0;
         for (File f : files) {
             if (f.isDirectory()) {
                 count += countExistingDownloadedFiles(f);
@@ -1010,20 +1012,12 @@ public class PlayerController extends Application {
 
     private void updatePlayButtonState(HBox controlsWrapper) {
         Button bigPlayBtn = getBigPlayButton(controlsWrapper);
-        if (bigPlayBtn == null) return;
+        if (bigPlayBtn == null)
+            return;
 
-        int total = currentGenreTotalFiles;
-        int downloaded = currentGenreDownloadedCount.get();
-
-        boolean enable;
-        if (total <= 2) {
-            enable = true;
-        } else {
-            enable = downloaded >= 2;
-        }
-
-        final boolean shouldEnable = enable;
-        Platform.runLater(() -> bigPlayBtn.setDisable(!shouldEnable));
+        // We now support streaming fallback, so the play button should always be
+        // enabled
+        Platform.runLater(() -> bigPlayBtn.setDisable(false));
     }
 
     private void setGenreSwitchEnabled(boolean enabled) {
@@ -1072,7 +1066,8 @@ public class PlayerController extends Application {
             List<PlaylistTrack> fetchedTracks = playlistApiService.fetchTracksForGenre(playlistName);
             List<Integer> downloadSeq = playlistApiService.fetchDownloadSequenceForGenre(playlistName);
 
-            if (downloadSeq == null) downloadSeq = new ArrayList<>();
+            if (downloadSeq == null)
+                downloadSeq = new ArrayList<>();
 
             // ✅ STEP 2: KEY FIX - Reorder playQueue to match downloadSequence
             // This ensures first songs in queue are the first ones being downloaded
@@ -1085,7 +1080,8 @@ public class PlayerController extends Application {
                     }
 
                     // Reorder playQueue to match downloadSeq order
-                    // e.g., if downloadSeq = [561, 572, 564], then playQueue[0]=561, playQueue[1]=572, etc.
+                    // e.g., if downloadSeq = [561, 572, 564], then playQueue[0]=561,
+                    // playQueue[1]=572, etc.
                     List<PlaylistTrack> reorderedQueue = new ArrayList<>();
                     for (Integer id : downloadSeq) {
                         if (trackMap.containsKey(id)) {
@@ -1133,8 +1129,8 @@ public class PlayerController extends Application {
 
             currentGenreTotalFiles = downloadSeq.size();
 
-            String baseDownloadDir =
-                    System.getProperty("user.home") + File.separator + ".scamusica" + File.separator + "downloads";
+            String baseDownloadDir = System.getProperty("user.home") + File.separator + ".scamusica" + File.separator
+                    + "downloads";
 
             String genreFolderPath = baseDownloadDir + File.separator + playlistName.replaceAll("\\s+", "_");
 
@@ -1192,8 +1188,10 @@ public class PlayerController extends Application {
                                 double frac = 0.0;
                                 if (contentLength > 0) {
                                     frac = ((double) bytesDownloaded) / ((double) contentLength);
-                                    if (frac < 0.0) frac = 0.0;
-                                    if (frac > 1.0) frac = 1.0;
+                                    if (frac < 0.0)
+                                        frac = 0.0;
+                                    if (frac > 1.0)
+                                        frac = 1.0;
                                 } else {
                                     frac = Math.min(1.0, bytesDownloaded / (1024.0 * 200));
                                 }
@@ -1201,44 +1199,44 @@ public class PlayerController extends Application {
                                 updateGenreDownloadLabel(downloadLabel);
                             }
 
-//                            @Override
-//                            public void onDownloadCompleted(int songId, File outputFile) {
-//
-//                                recomputeGlobalCountAndUpdateUI();
-//
-//                                Platform.runLater(() -> {
-//
-//                                    int newGenreCount = countExistingInGenreFolder(genreFolderPath);
-//                                    currentGenreDownloadedCount.set(newGenreCount);
-//
-//                                    currentFileProgressFraction = 0.0;
-//
-//                                    updateGenreDownloadLabel(downloadLabel);
-//                                    updatePlayButtonState(controlsWrapper);
-//                                    AppLogger.log("[AUTO-PLAY] Downloaded count: " + newGenreCount);
-//                                    if (newGenreCount >= 2) {
-//                                        if (!vlcPlayer.status().isPlaying() && !userPaused) {
-//                                            try {
-//                                                AppLogger.log("[AutoPlay] 2 songs downloaded. Starting playback." +
-//                                                        "..");
-//                                                playTrack(
-//                                                        albumHeading,
-//                                                        titleLabel,
-//                                                        progressSlider,
-//                                                        leftTime,
-//                                                        rightTime,
-//                                                        controlsWrapper,
-//                                                        bottomBar,
-//                                                        downloadLabel,
-//                                                        true
-//                                                );
-//                                            } catch (URISyntaxException e) {
-//                                                e.printStackTrace();
-//                                            }
-//                                        }
-//                                    }
-//                                });
-//                            }
+                            // @Override
+                            // public void onDownloadCompleted(int songId, File outputFile) {
+                            //
+                            // recomputeGlobalCountAndUpdateUI();
+                            //
+                            // Platform.runLater(() -> {
+                            //
+                            // int newGenreCount = countExistingInGenreFolder(genreFolderPath);
+                            // currentGenreDownloadedCount.set(newGenreCount);
+                            //
+                            // currentFileProgressFraction = 0.0;
+                            //
+                            // updateGenreDownloadLabel(downloadLabel);
+                            // updatePlayButtonState(controlsWrapper);
+                            // AppLogger.log("[AUTO-PLAY] Downloaded count: " + newGenreCount);
+                            // if (newGenreCount >= 2) {
+                            // if (!vlcPlayer.status().isPlaying() && !userPaused) {
+                            // try {
+                            // AppLogger.log("[AutoPlay] 2 songs downloaded. Starting playback." +
+                            // "..");
+                            // playTrack(
+                            // albumHeading,
+                            // titleLabel,
+                            // progressSlider,
+                            // leftTime,
+                            // rightTime,
+                            // controlsWrapper,
+                            // bottomBar,
+                            // downloadLabel,
+                            // true
+                            // );
+                            // } catch (URISyntaxException e) {
+                            // e.printStackTrace();
+                            // }
+                            // }
+                            // }
+                            // });
+                            // }
 
                             @Override
                             public void onDownloadCompleted(int songId, File outputFile) {
@@ -1251,14 +1249,15 @@ public class PlayerController extends Application {
 
                                     updateGenreDownloadLabel(downloadLabel);
                                     updatePlayButtonState(controlsWrapper);
-                                    AppLogger.log("[AUTO-PLAY] Downloaded: " + newGenreCount + "/" + currentGenreTotalFiles);
+                                    AppLogger.log(
+                                            "[AUTO-PLAY] Downloaded: " + newGenreCount + "/" + currentGenreTotalFiles);
 
                                     // ✅ FIX: Add isFirstTrackStarted check
                                     if (newGenreCount >= 2
-                                            && !isFirstTrackStarted      // ← ← ← NEW
+                                            && !isFirstTrackStarted // ← ← ← NEW
                                             && !vlcPlayer.status().isPlaying()
                                             && !userPaused
-                                            && (playQueue.isEmpty() || currentTrackIndex == 0)) {  // ← ← ← NEW
+                                            && (playQueue.isEmpty() || currentTrackIndex == 0)) { // ← ← ← NEW
 
                                         try {
                                             if (playQueue.isEmpty()) {
@@ -1275,10 +1274,9 @@ public class PlayerController extends Application {
                                                     controlsWrapper,
                                                     bottomBar,
                                                     downloadLabel,
-                                                    true
-                                            );
+                                                    true);
 
-                                            isFirstTrackStarted = true;  // ← ← ← SET FLAG AFTER PLAY
+                                            isFirstTrackStarted = true; // ← ← ← SET FLAG AFTER PLAY
 
                                         } catch (URISyntaxException e) {
                                             e.printStackTrace();
@@ -1300,7 +1298,8 @@ public class PlayerController extends Application {
 
                             @Override
                             public void onDownloadFailed(int songId, Exception ex) {
-                                AppLogger.log("[PlayerController] Download failed id=" + songId + " -> " + ex.getMessage());
+                                AppLogger.log(
+                                        "[PlayerController] Download failed id=" + songId + " -> " + ex.getMessage());
                                 currentFileProgressFraction = 0.0;
                                 updateGenreDownloadLabel(downloadLabel);
                             }
@@ -1356,15 +1355,15 @@ public class PlayerController extends Application {
                     controlsWrapper,
                     bottomBar,
                     downloadLabel,
-                    autoPlay
-            );
+                    autoPlay);
         } else {
             albumHeading.textProperty().bind(LanguageManager.createStringBinding("label.noSong"));
         }
     }
 
     private void updateGenreDownloadLabel(Label downloadLabel) {
-        if (downloadLabel == null) return;
+        if (downloadLabel == null)
+            return;
 
         double percent = 0.0;
         if (currentGenreTotalFiles <= 0) {
@@ -1373,8 +1372,10 @@ public class PlayerController extends Application {
             double completed = currentGenreDownloadedCount.get();
             double frac = currentFileProgressFraction;
             percent = ((completed + frac) / (double) currentGenreTotalFiles) * 100.0;
-            if (percent < 0.0) percent = 0.0;
-            if (percent > 100.0) percent = 100.0;
+            if (percent < 0.0)
+                percent = 0.0;
+            if (percent > 100.0)
+                percent = 100.0;
         }
 
         final String text = String.format("%.0f%% %s (%d/%d)", percent, LanguageManager.createStringBinding("label" +
@@ -1409,7 +1410,8 @@ public class PlayerController extends Application {
                            Label downloadLabel,
                            boolean autoPlay) throws URISyntaxException {
 
-        if (playQueue.isEmpty()) return;
+        if (playQueue.isEmpty())
+            return;
 
         if (currentTrackIndex < 0 || currentTrackIndex >= playQueue.size()) {
             stopPlayback(progressSlider, leftTime, rightTime, controlsWrapper, downloadLabel);
@@ -1417,21 +1419,21 @@ public class PlayerController extends Application {
         }
 
         PlaylistTrack track = playQueue.get(currentTrackIndex);
-        //New Code for generating the file
+        // New Code for generating the file
         PlaybackHistoryLogger.logSong(track);
         // New Code for generating the file
         AppLogger.log("[PLAYER][PLAY] " + track.getTitle() + " (ID: " + track.getId() + ")");
 
-//        if (albumImageView != null) {
-//            String albumImgUrl = track.getAlbumImageUrl();
-//            if (albumImgUrl != null && !albumImgUrl.trim().isEmpty()) {
-//                try {
-//                    albumImageView.setImage(new Image(albumImgUrl, true));
-//                } catch (Exception ex) {
-//                    ex.printStackTrace();
-//                }
-//            }
-//        }
+        // if (albumImageView != null) {
+        // String albumImgUrl = track.getAlbumImageUrl();
+        // if (albumImgUrl != null && !albumImgUrl.trim().isEmpty()) {
+        // try {
+        // albumImageView.setImage(new Image(albumImgUrl, true));
+        // } catch (Exception ex) {
+        // ex.printStackTrace();
+        // }
+        // }
+        // }
 
         if (albumImageView != null) {
             albumImageView.setImage(null);
@@ -1518,8 +1520,7 @@ public class PlayerController extends Application {
                                         controlsWrapper,
                                         bottomBar,
                                         downloadLabel,
-                                        autoPlay
-                                );
+                                        autoPlay);
 
                                 vlcHandlersAttached = true;
                             }
@@ -1529,7 +1530,6 @@ public class PlayerController extends Application {
                         AppLogger.log("[PLAYER] Decryption failed for song-" + track.getId()
                                 + ", file corrupted. Deleting and streaming from URL. Error: " + e.getMessage());
                         encryptedFile.delete();
-
 
                         if (NetworkMonitor.getInstance().isOnline()) {
                             Platform.runLater(() -> {
@@ -1542,7 +1542,8 @@ public class PlayerController extends Application {
                                 }
                             });
                         } else {
-                            AppLogger.log("[PLAYER] Offline — cannot stream fallback for song-" + track.getId() + ", skipping to next.");
+                            AppLogger.log("[PLAYER] Offline — cannot stream fallback for song-" + track.getId()
+                                    + ", skipping to next.");
                             Platform.runLater(() -> {
                                 try {
                                     playNextTrack(albumHeading, titleLabel, progressSlider,
@@ -1580,13 +1581,11 @@ public class PlayerController extends Application {
                     controlsWrapper,
                     bottomBar,
                     downloadLabel,
-                    autoPlay
-            );
+                    autoPlay);
 
             vlcHandlersAttached = true;
         }
     }
-
 
     private void attachVlcHandlers(
             Label albumHeading,
@@ -1597,8 +1596,7 @@ public class PlayerController extends Application {
             HBox controlsWrapper,
             HBox bottomBar,
             Label downloadLabel,
-            boolean autoPlay
-    ) {
+            boolean autoPlay) {
 
         if (currentVlcListener != null) {
             try {
@@ -1669,7 +1667,8 @@ public class PlayerController extends Application {
 
                 if (currentTempFile != null) {
                     try {
-                        if (currentTempFile.exists()) currentTempFile.delete();
+                        if (currentTempFile.exists())
+                            currentTempFile.delete();
                         AppLogger.log("[TEMP] Deleted on finish: " + currentTempFile.getName());
                     } catch (Exception ignored) {
                     }
@@ -1689,8 +1688,7 @@ public class PlayerController extends Application {
                                 rightTime,
                                 controlsWrapper,
                                 bottomBar,
-                                downloadLabel
-                        );
+                                downloadLabel);
 
                     } catch (Exception e) {
                         e.printStackTrace();
@@ -1727,8 +1725,7 @@ public class PlayerController extends Application {
                 controlsWrapper,
                 bottomBar,
                 downloadLabel,
-                true
-        );
+                true);
     }
 
     private void setupBigPlayBehaviour(Label albumHeading,
@@ -1741,11 +1738,12 @@ public class PlayerController extends Application {
                                        Label downloadLabel) {
 
         Button bigPlayBtn;
+        StackPane playContainer;
         try {
-            bigPlayBtn = (Button) ((StackPane) controlsWrapper.getChildren().get(1))
-                    .getChildren().get(0);
+            playContainer = (StackPane) controlsWrapper.getChildren().get(1);
+            bigPlayBtn = (Button) playContainer.getChildren().get(0);
         } catch (Exception e) {
-            bigPlayBtn = null;
+            return;
         }
 
         FontIcon bigIcon = controlsUtil.getBigPlayIcon(controlsWrapper);
@@ -1754,7 +1752,8 @@ public class PlayerController extends Application {
             return;
         }
 
-        bigPlayBtn.setOnAction(e -> {
+        javafx.event.EventHandler<javafx.scene.input.MouseEvent> clickHandler = e -> {
+            e.consume();
             if (playQueue.isEmpty()) {
                 return;
             }
@@ -1771,8 +1770,7 @@ public class PlayerController extends Application {
                             controlsWrapper,
                             bottomBar,
                             downloadLabel,
-                            true
-                    );
+                            true);
                 } catch (URISyntaxException ex) {
                     throw new RuntimeException(ex);
                 }
@@ -1785,12 +1783,33 @@ public class PlayerController extends Application {
                 bigIcon.setIconLiteral("fas-play");
                 bigIcon.setIconColor(javafx.scene.paint.Color.WHITE);
             } else {
-                vlcPlayer.controls().play();
-                userPaused = false;
-                bigIcon.setIconLiteral("fas-pause");
-                bigIcon.setIconColor(javafx.scene.paint.Color.WHITE);
+                if (vlcPlayer.status().state() == uk.co.caprica.vlcj.player.base.State.STOPPED ||
+                        vlcPlayer.status().state() == uk.co.caprica.vlcj.player.base.State.ENDED) {
+                    try {
+                        playTrack(
+                                albumHeading,
+                                titleLabel,
+                                progressSlider,
+                                leftTime,
+                                rightTime,
+                                controlsWrapper,
+                                bottomBar,
+                                downloadLabel,
+                                true);
+                    } catch (Exception ex) {
+                        ex.printStackTrace();
+                    }
+                } else {
+                    vlcPlayer.controls().play();
+                    userPaused = false;
+                    bigIcon.setIconLiteral("fas-pause");
+                    bigIcon.setIconColor(javafx.scene.paint.Color.WHITE);
+                }
             }
-        });
+        };
+
+        bigPlayBtn.addEventFilter(javafx.scene.input.MouseEvent.MOUSE_CLICKED, clickHandler);
+        playContainer.addEventFilter(javafx.scene.input.MouseEvent.MOUSE_CLICKED, clickHandler);
     }
 
     private void stopPlayback(Slider progressSlider,
@@ -1810,7 +1829,8 @@ public class PlayerController extends Application {
 
         if (currentTempFile != null) {
             try {
-                if (currentTempFile.exists()) currentTempFile.delete();
+                if (currentTempFile.exists())
+                    currentTempFile.delete();
             } catch (Exception ignored) {
             }
             currentTempFile = null;
@@ -1881,7 +1901,6 @@ public class PlayerController extends Application {
     private String encodeMediaUrl(String rawUrl) {
         try {
             URL url = new URL(rawUrl);
-
             String normalizedPath = Normalizer.normalize(url.getPath(), Normalizer.Form.NFC);
 
             String encodedPath = Arrays.stream(normalizedPath.split("/"))
@@ -1902,26 +1921,6 @@ public class PlayerController extends Application {
         }
     }
 
-//    private File decryptToTemp(File encryptedFile) throws Exception {
-//        File tempFile = File.createTempFile("play_", ".mp3");
-//        tempFile.deleteOnExit();
-//
-//        try (FileInputStream fis = new FileInputStream(encryptedFile);
-//             CipherInputStream cis = CryptoUtil.decrypt(fis);
-//             FileOutputStream fos = new FileOutputStream(tempFile)) {
-//
-//            byte[] buffer = new byte[8192];
-//            int read;
-//
-//            while ((read = cis.read(buffer)) != -1) {
-//                fos.write(buffer, 0, read);
-//            }
-//        }
-//
-//        return tempFile;
-//    }
-
-    // For Windows
     private File decryptToTemp(File encryptedFile) throws Exception {
         File tempDir = new File(System.getProperty("user.home")
                 + File.separator + ".scamusica"
