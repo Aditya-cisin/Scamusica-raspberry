@@ -122,6 +122,19 @@ public class PlayerController extends Application {
         NetworkMonitor.getInstance().start();
         AppLogger.log("[APP] Player started");
 
+        // === TEMP CLEANUP ===
+        File tempDir = new File(System.getProperty("user.home")
+                + File.separator + ".scamusica"
+                + File.separator + "temp");
+        if (tempDir.exists() && tempDir.isDirectory()) {
+            File[] files = tempDir.listFiles();
+            if (files != null) {
+                for (File f : files) {
+                    f.delete();
+                }
+            }
+        }
+
         String appDir = System.getProperty("user.dir");
 
         String vlcPath = appDir + File.separator + "vlc";
@@ -1915,7 +1928,6 @@ public class PlayerController extends Application {
                 + File.separator + "temp");
         tempDir.mkdirs();
         File tempFile = new File(tempDir, "play_" + System.currentTimeMillis() + ".mp3");
-        tempFile.deleteOnExit(); // ✅ Same as before
 
         try (FileInputStream fis = new FileInputStream(encryptedFile);
              CipherInputStream cis = CryptoUtil.decrypt(fis);

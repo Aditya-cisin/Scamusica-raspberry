@@ -42,9 +42,10 @@ public class ConnectivityMonitor {
     }
 
     private Status checkApiConnectivity() {
+        HttpURLConnection con = null;
         try {
             URL url = new URL(Utility.BASE_URL.get());
-            HttpURLConnection con = (HttpURLConnection) url.openConnection();
+            con = (HttpURLConnection) url.openConnection();
             con.setRequestMethod("GET");
             con.setConnectTimeout(2000);
             con.setReadTimeout(2000);
@@ -56,8 +57,15 @@ public class ConnectivityMonitor {
                     : Status.OFFLINE;
 
         } catch (Exception e) {
-            e.printStackTrace();
+            // Mute stack trace print to avoid log spam on expected timeouts
+            // e.printStackTrace();
             return Status.OFFLINE;
+        } finally {
+            if (con != null) {
+                try {
+                    con.disconnect();
+                } catch (Exception ignored) {}
+            }
         }
     }
 }
