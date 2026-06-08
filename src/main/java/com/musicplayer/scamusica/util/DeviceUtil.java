@@ -44,7 +44,7 @@ public class DeviceUtil {
             while (interfaces.hasMoreElements()) {
                 NetworkInterface network = interfaces.nextElement();
 
-                if (network.isLoopback() || network.isVirtual() || !network.isUp()) {
+                if (network.isLoopback() || network.isVirtual()) {
                     continue;
                 }
 

@@ -7,6 +7,7 @@ import com.musicplayer.scamusica.manager.LanguageManager;
 import com.musicplayer.scamusica.manager.SessionManager;
 import com.musicplayer.scamusica.service.ConnectivityMonitor;
 import com.musicplayer.scamusica.ui.LangItem;
+import com.musicplayer.scamusica.util.AppLogger;
 import com.musicplayer.scamusica.util.Utility;
 import javafx.application.Application;
 import javafx.application.Platform;
@@ -334,7 +335,7 @@ public class CodeVerificationController extends Application {
                         }
 
                         String deviceId = DeviceFingerprint.getFingerprint();
-                        System.out.println("Device Id : " + deviceId);
+                        AppLogger.log("Device Id : " + deviceId);
 
                         String requestBody = "{"
                                 + "\"licenseCode\": \"" + enteredPassword + "\","

@@ -4,6 +4,7 @@ import com.musicplayer.scamusica.controller.CodeVerificationController;
 import com.musicplayer.scamusica.controller.PlayerController;
 import com.musicplayer.scamusica.manager.LanguageManager;
 import com.musicplayer.scamusica.manager.SessionManager;
+import com.musicplayer.scamusica.util.AppLogger;
 import javafx.application.Application;
 import javafx.stage.Stage;
 
@@ -52,6 +53,7 @@ public class Main extends Application {
     }
 
     public static void main(String[] args) {
+        AppLogger.init();
         setupVlc();
         launch(args);
     }
