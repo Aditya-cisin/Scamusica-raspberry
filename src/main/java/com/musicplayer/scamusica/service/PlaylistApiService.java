@@ -443,14 +443,31 @@ public class PlaylistApiService {
                 JsonObject adObj = adEl.getAsJsonObject();
 
                 Ad ad = new Ad();
-                ad.setId(adObj.has("id") ? adObj.get("id").getAsInt() : null);
-                ad.setCampaignName(adObj.has("campaign_name") ? adObj.get("campaign_name").getAsString() : "Unknown");
-                ad.setAudioFile(adObj.has("audio_file") ? adObj.get("audio_file").getAsString() : null);
-                ad.setAudioSource(adObj.has("audio_source") ? adObj.get("audio_source").getAsString() : null);
-                ad.setScheduleType(adObj.has("schedule_type") ? adObj.get("schedule_type").getAsString() : null);
-                ad.setStartDate(adObj.has("start_date") ? adObj.get("start_date").getAsString() : null);
-                ad.setEndDate(adObj.has("end_date") ? adObj.get("end_date").getAsString() : null);
-                ad.setStatus(adObj.has("status") ? adObj.get("status").getAsString() : "inactive");
+                ad.setId(adObj.has("id") && !adObj.get("id").isJsonNull() ? adObj.get("id").getAsInt() : null);
+                ad.setCampaignName(adObj.has("campaign_name") && !adObj.get("campaign_name").isJsonNull() ? adObj.get("campaign_name").getAsString() : "Unknown");
+                ad.setScheduleType(adObj.has("schedule_type") && !adObj.get("schedule_type").isJsonNull() ? adObj.get("schedule_type").getAsString() : null);
+                ad.setStartDate(adObj.has("start_date") && !adObj.get("start_date").isJsonNull() ? adObj.get("start_date").getAsString() : null);
+                ad.setEndDate(adObj.has("end_date") && !adObj.get("end_date").isJsonNull() ? adObj.get("end_date").getAsString() : null);
+                ad.setStatus(adObj.has("status") && !adObj.get("status").isJsonNull() ? adObj.get("status").getAsString() : "inactive");
+
+                List<com.musicplayer.scamusica.model.AdAudio> adAudioList = new ArrayList<>();
+                if (adObj.has("adAudios") && adObj.get("adAudios").isJsonArray()) {
+                    JsonArray adAudiosArray = adObj.getAsJsonArray("adAudios");
+                    for (JsonElement audioEl : adAudiosArray) {
+                        if (!audioEl.isJsonObject()) continue;
+                        JsonObject audioObj = audioEl.getAsJsonObject();
+                        com.musicplayer.scamusica.model.AdAudio adAudio = new com.musicplayer.scamusica.model.AdAudio();
+                        adAudio.setId(audioObj.has("id") && !audioObj.get("id").isJsonNull() ? audioObj.get("id").getAsInt() : null);
+                        adAudio.setAdId(audioObj.has("ad_id") && !audioObj.get("ad_id").isJsonNull() ? audioObj.get("ad_id").getAsInt() : null);
+                        adAudio.setAudioFile(audioObj.has("audio_file") && !audioObj.get("audio_file").isJsonNull() ? audioObj.get("audio_file").getAsString() : null);
+                        adAudio.setAudioSource(audioObj.has("audio_source") && !audioObj.get("audio_source").isJsonNull() ? audioObj.get("audio_source").getAsString() : null);
+                        adAudio.setSortOrder(audioObj.has("sort_order") && !audioObj.get("sort_order").isJsonNull() ? audioObj.get("sort_order").getAsInt() : 0);
+                        adAudioList.add(adAudio);
+                    }
+                }
+
+                adAudioList.sort(Comparator.comparingInt(a -> a.getSortOrder() != null ? a.getSortOrder() : 0));
+                ad.setAdAudios(adAudioList);
 
                 // Handle playTimes (can be array or number)
                 if (adObj.has("play_times")) {

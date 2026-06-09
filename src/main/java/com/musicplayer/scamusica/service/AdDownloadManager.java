@@ -2,12 +2,11 @@ package com.musicplayer.scamusica.service;
 
 import com.musicplayer.scamusica.manager.SessionManager;
 import com.musicplayer.scamusica.model.Ad;
+import com.musicplayer.scamusica.util.ApiClient;
 import com.musicplayer.scamusica.util.AppLogger;
 import com.musicplayer.scamusica.util.Utility;
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.InputStream;
+import java.io.*;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.List;
@@ -22,24 +21,40 @@ public class AdDownloadManager {
         return dir;
     }
 
-    public static File getLocalAdFile(Ad ad) {
-        if (ad == null || ad.getId() == null) return null;
-        return new File(getAdDir(), "ad-" + ad.getId() + ".mp3");
+    public static File getLocalAdFile(com.musicplayer.scamusica.model.AdAudio adAudio) {
+        if (adAudio == null || adAudio.getId() == null) return null;
+        return new File(getAdDir(), "ad-audio-" + adAudio.getId() + ".mp3");
     }
 
     public static boolean isAdDownloaded(Ad ad) {
-        File f = getLocalAdFile(ad);
-        return f != null && f.exists() && f.length() > 1024;
+        if (ad == null || ad.getAdAudios() == null || ad.getAdAudios().isEmpty()) return false;
+        for (com.musicplayer.scamusica.model.AdAudio adAudio : ad.getAdAudios()) {
+            File f = getLocalAdFile(adAudio);
+            if (f == null || !f.exists() || f.length() <= 1024) {
+                return false;
+            }
+        }
+        return true;
     }
 
     public static void downloadAd(Ad ad) {
-        if (ad == null || ad.getId() == null) return;
+        if (ad == null || ad.getId() == null || ad.getAdAudios() == null) return;
         if (isAdDownloaded(ad)) {
-            AppLogger.log("[AdDownload] Already exists: ad-" + ad.getId());
+            AppLogger.log("[AdDownload] Already exists all audios for ad-" + ad.getId());
             return;
         }
 
-        String audioFile = ad.getAudioFile();
+        for (com.musicplayer.scamusica.model.AdAudio adAudio : ad.getAdAudios()) {
+            downloadAdAudio(adAudio);
+        }
+    }
+
+    private static void downloadAdAudio(com.musicplayer.scamusica.model.AdAudio adAudio) {
+        if (adAudio == null || adAudio.getId() == null) return;
+        File f = getLocalAdFile(adAudio);
+        if (f != null && f.exists() && f.length() > 1024) return;
+
+        String audioFile = adAudio.getAudioFile();
         if (audioFile == null || audioFile.isEmpty()) return;
 
         String downloadUrl;
@@ -58,8 +73,8 @@ public class AdDownloadManager {
 
         Thread t = new Thread(() -> {
             try {
-                File outFile = getLocalAdFile(ad);
-                AppLogger.log("[AdDownload] Downloading ad-" + ad.getId() + " from: " + finalUrl);
+                File outFile = getLocalAdFile(adAudio);
+                AppLogger.log("[AdDownload] Downloading ad-audio-" + adAudio.getId() + " from: " + finalUrl);
 
                 HttpURLConnection conn = (HttpURLConnection) new URL(finalUrl).openConnection();
                 conn.setConnectTimeout(10000);
@@ -80,14 +95,14 @@ public class AdDownloadManager {
                             fos.write(buffer, 0, read);
                         }
                     }
-                    AppLogger.log("[AdDownload] Done: ad-" + ad.getId() + " size=" + outFile.length());
+                    AppLogger.log("[AdDownload] Done: ad-audio-" + adAudio.getId() + " size=" + outFile.length());
                 } else {
-                    AppLogger.log("[AdDownload] Failed HTTP " + responseCode + " for ad-" + ad.getId());
+                    AppLogger.log("[AdDownload] Failed HTTP " + responseCode + " for ad-audio-" + adAudio.getId());
                 }
                 conn.disconnect();
 
             } catch (Exception e) {
-                AppLogger.log("[AdDownload] Error downloading ad-" + ad.getId() + ": " + e.getMessage());
+                AppLogger.log("[AdDownload] Error downloading ad-audio-" + adAudio.getId() + ": " + e.getMessage());
             }
         });
         t.setDaemon(true);

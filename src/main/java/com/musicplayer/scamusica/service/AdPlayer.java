@@ -15,9 +15,13 @@ public class AdPlayer {
 
     public interface AdPlaybackListener {
         void onAdPlaybackStarted(Ad ad);
+
         void onAdPlaybackFinished(Ad ad);
+
         void onSongPaused(String reason);
+
         void onSongResumed();
+
         void onPlaybackError(Exception ex);
     }
 
@@ -103,7 +107,8 @@ public class AdPlayer {
         // Step 1: Save current song state
         try {
             savedSongTime = vlcPlayer.status().time();
-        } catch (Exception ignored) {}
+        } catch (Exception ignored) {
+        }
 
         int originalVol = vlcPlayer.audio().volume();
         try {
@@ -115,7 +120,8 @@ public class AdPlayer {
                 Thread.sleep(100);
             }
             vlcPlayer.audio().setVolume(0);
-        } catch (Exception e) {}
+        } catch (Exception e) {
+        }
 
         // Step 2: Stop current song
         Platform.runLater(() -> {
@@ -131,70 +137,72 @@ public class AdPlayer {
 
                 vlcPlayer.audio().setVolume(originalVol);
 
-            } catch (Exception ignored) {}
+            } catch (Exception ignored) {
+            }
         });
         Thread.sleep(600);
 
-        // Step 3: Build ad URL
-        String adUrl = buildAdUrl(ad);
-        if (adUrl == null) {
-            AppLogger.log("[AdPlayer] Invalid ad URL, skipping");
-            playNextAd();
-            return;
+        // Step 3: Loop over ad audios
+        if (ad.getAdAudios() != null && !ad.getAdAudios().isEmpty()) {
+            for (com.musicplayer.scamusica.model.AdAudio adAudio : ad.getAdAudios()) {
+                String adUrl = buildAdUrl(adAudio);
+                if (adUrl == null) {
+                    AppLogger.log("[AdPlayer] Invalid ad audio URL, skipping");
+                    continue;
+                }
+
+                AppLogger.log("[AdPlayer] Playing ad from URL: " + adUrl);
+
+                CountDownLatch latch = new CountDownLatch(1);
+                final MediaPlayerEventAdapter[] adListener = new MediaPlayerEventAdapter[1];
+
+                Platform.runLater(() -> {
+                    try {
+                        listener.onAdPlaybackStarted(ad);
+                        AppLogger.log("[AdPlayer] STARTING ACTUAL VLC PLAY");
+                        boolean result = vlcPlayer.media().play(adUrl);
+
+                        AppLogger.log("[AdPlayer] VLC PLAY RESULT = " + result);
+
+                        adListener[0] = new MediaPlayerEventAdapter() {
+                            @Override
+                            public void finished(MediaPlayer mediaPlayer) {
+                                AppLogger.log("[AdPlayer] Ad audio finished");
+                                vlcPlayer.events().removeMediaPlayerEventListener(this);
+                                latch.countDown();
+                            }
+
+                            @Override
+                            public void error(MediaPlayer mediaPlayer) {
+                                AppLogger.log("[AdPlayer] Ad audio error");
+                                vlcPlayer.events().removeMediaPlayerEventListener(this);
+                                latch.countDown();
+                            }
+                        };
+                        vlcPlayer.events().addMediaPlayerEventListener(adListener[0]);
+                    } catch (Exception e) {
+                        AppLogger.log("[AdPlayer] Failed to start ad audio: " + e.getMessage());
+                        latch.countDown();
+                    }
+                });
+
+                boolean finished = latch.await(10, TimeUnit.MINUTES);
+                AppLogger.log("[AdPlayer] Ad latch released, finished=" + finished);
+
+                Platform.runLater(() -> {
+                    if (adListener[0] != null) {
+                        try {
+                            vlcPlayer.events().removeMediaPlayerEventListener(adListener[0]);
+                        } catch (Exception ignored) {
+                        }
+                    }
+                });
+
+                Thread.sleep(300); // Minor delay between consecutive audios
+            }
+        } else {
+            AppLogger.log("[AdPlayer] No audios found for ad: " + ad.getCampaignName());
         }
-
-        AppLogger.log("[AdPlayer] Playing ad from URL: " + adUrl);
-
-        // Step 4: Play ad using CountDownLatch to wait for finish
-        CountDownLatch latch = new CountDownLatch(1);
-
-        final MediaPlayerEventAdapter[] adListener = new MediaPlayerEventAdapter[1];
-
-        Platform.runLater(() -> {
-            try {
-                listener.onAdPlaybackStarted(ad);
-                AppLogger.log("[AdPlayer] STARTING ACTUAL VLC PLAY");
-                boolean result = vlcPlayer.media().play(adUrl);
-
-                AppLogger.log("[AdPlayer] VLC PLAY RESULT = " + result);
-
-                // One-time listener for this ad
-                adListener[0] = new MediaPlayerEventAdapter() {
-                    @Override
-                    public void finished(MediaPlayer mediaPlayer) {
-                        AppLogger.log("[AdPlayer] Ad finished: " + ad.getCampaignName());
-                        vlcPlayer.events().removeMediaPlayerEventListener(this);
-                        latch.countDown();
-                    }
-
-                    @Override
-                    public void error(MediaPlayer mediaPlayer) {
-                        AppLogger.log("[AdPlayer] Ad error: " + ad.getCampaignName());
-                        vlcPlayer.events().removeMediaPlayerEventListener(this);
-                        latch.countDown();
-                    }
-                };
-                vlcPlayer.events().addMediaPlayerEventListener(adListener[0]);
-            } catch (Exception e) {
-                AppLogger.log("[AdPlayer] Failed to start ad: " + e.getMessage());
-                latch.countDown();
-            }
-        });
-
-        // Step 5: Wait for ad to finish (max 10 minutes)
-        boolean finished = latch.await(10, TimeUnit.MINUTES);
-        AppLogger.log("[AdPlayer] Ad latch released, finished=" + finished);
-
-        // Guarantee cleanup to prevent RAM leaks
-        Platform.runLater(() -> {
-            if (adListener[0] != null) {
-                try {
-                    vlcPlayer.events().removeMediaPlayerEventListener(adListener[0]);
-                } catch (Exception ignored) {}
-            }
-        });
-
-        Thread.sleep(300);
 
         // Step 6: Ad done, notify
         Platform.runLater(() -> listener.onAdPlaybackFinished(ad));
@@ -213,21 +221,21 @@ public class AdPlayer {
         });
     }
 
-    private String buildAdUrl(Ad ad) {
-        if (ad == null) return null;
+    private String buildAdUrl(com.musicplayer.scamusica.model.AdAudio adAudio) {
+        if (adAudio == null) return null;
 
-        if (AdDownloadManager.isAdDownloaded(ad)) {
-            File localFile = AdDownloadManager.getLocalAdFile(ad);
+        File localFile = AdDownloadManager.getLocalAdFile(adAudio);
+        if (localFile != null && localFile.exists() && localFile.length() > 1024) {
             AppLogger.log("[AdPlayer] Playing ad from local file: " + localFile.getAbsolutePath());
             return localFile.getAbsolutePath();
         }
 
         if (!NetworkMonitor.getInstance().isOnline()) {
-            AppLogger.log("[AdPlayer] Ad not downloaded and offline, skipping: " + ad.getCampaignName());
+            AppLogger.log("[AdPlayer] Ad not downloaded and offline, skipping: ad-audio-" + adAudio.getId());
             return null;
         }
 
-        String audioFile = ad.getAudioFile();
+        String audioFile = adAudio.getAudioFile();
         if (audioFile == null || audioFile.isEmpty()) return null;
 
         if (audioFile.startsWith("http://") || audioFile.startsWith("https://")) {

@@ -11,11 +11,8 @@ public class Ad {
     @SerializedName("campaign_name")
     private String campaignName;
 
-    @SerializedName("audio_file")
-    private String audioFile;
-
-    @SerializedName("audio_source")
-    private String audioSource;
+    @SerializedName("adAudios")
+    private List<AdAudio> adAudios;
 
     @SerializedName("schedule_type")
     private String scheduleType;
@@ -34,19 +31,16 @@ public class Ad {
 
     private String status;
 
-    @SerializedName("generatedAudio")
-    private String generatedAudio;
 
     public Ad() {
     }
 
-    public Ad(Integer id, String campaignName, String audioFile, String audioSource,
+    public Ad(Integer id, String campaignName, List<AdAudio> adAudios,
               String scheduleType, Object playTimes, String startDate, String endDate,
               List<String> activeDays, String status) {
         this.id = id;
         this.campaignName = campaignName;
-        this.audioFile = audioFile;
-        this.audioSource = audioSource;
+        this.adAudios = adAudios;
         this.scheduleType = scheduleType;
         this.playTimes = playTimes;
         this.startDate = startDate;
@@ -55,6 +49,7 @@ public class Ad {
         this.status = status;
     }
 
+    // Getters
     public Integer getId() {
         return id;
     }
@@ -63,12 +58,8 @@ public class Ad {
         return campaignName;
     }
 
-    public String getAudioFile() {
-        return audioFile;
-    }
-
-    public String getAudioSource() {
-        return audioSource;
+    public List<AdAudio> getAdAudios() {
+        return adAudios;
     }
 
     public String getScheduleType() {
@@ -95,10 +86,8 @@ public class Ad {
         return status;
     }
 
-    public String getGeneratedAudio() {
-        return generatedAudio;
-    }
 
+    // Setters
     public void setId(Integer id) {
         this.id = id;
     }
@@ -107,12 +96,8 @@ public class Ad {
         this.campaignName = campaignName;
     }
 
-    public void setAudioFile(String audioFile) {
-        this.audioFile = audioFile;
-    }
-
-    public void setAudioSource(String audioSource) {
-        this.audioSource = audioSource;
+    public void setAdAudios(List<AdAudio> adAudios) {
+        this.adAudios = adAudios;
     }
 
     public void setScheduleType(String scheduleType) {
@@ -139,9 +124,6 @@ public class Ad {
         this.status = status;
     }
 
-    public void setGeneratedAudio(String generatedAudio) {
-        this.generatedAudio = generatedAudio;
-    }
 
     @Override
     public String toString() {
