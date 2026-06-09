@@ -19,6 +19,15 @@ public class AppLogger {
             File dir = new File(baseDir);
             if (!dir.exists()) dir.mkdirs();
 
+            // Cleanup old log files — keep only the latest 5
+            File[] existingLogs = dir.listFiles((d, name) -> name.startsWith("player_") && name.endsWith(".log"));
+            if (existingLogs != null && existingLogs.length > 5) {
+                java.util.Arrays.sort(existingLogs, java.util.Comparator.comparingLong(File::lastModified));
+                for (int i = 0; i < existingLogs.length - 5; i++) {
+                    existingLogs[i].delete();
+                }
+            }
+
             String timestamp = new SimpleDateFormat("yyyy-MM-dd_HH-mm-ss").format(new Date());
             File logFile = new File(dir, "player_" + timestamp + ".log");
 

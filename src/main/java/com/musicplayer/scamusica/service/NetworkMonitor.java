@@ -98,18 +98,24 @@ public class NetworkMonitor {
     }
 
     private boolean pingServer() {
+        HttpURLConnection connection = null;
         try {
-            HttpURLConnection connection = (HttpURLConnection)
+            connection = (HttpURLConnection)
                     new URL(PING_URL).openConnection();
             connection.setConnectTimeout(TIMEOUT_MS);
             connection.setReadTimeout(TIMEOUT_MS);
             connection.setRequestMethod("HEAD");
             connection.setInstanceFollowRedirects(false);
             int responseCode = connection.getResponseCode();
-            connection.disconnect();
             return (responseCode == 204 || responseCode == 200 || responseCode == 301);
         } catch (IOException e) {
             return false;
+        } finally {
+            if (connection != null) {
+                try {
+                    connection.disconnect();
+                } catch (Exception ignored) {}
+            }
         }
     }
 }

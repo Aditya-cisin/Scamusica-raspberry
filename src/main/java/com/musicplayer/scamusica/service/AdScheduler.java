@@ -45,7 +45,11 @@ public class AdScheduler {
         }
 
         running = true;
-        scheduler = Executors.newScheduledThreadPool(1);
+        scheduler = Executors.newScheduledThreadPool(1, r -> {
+            Thread t = new Thread(r, "AdScheduler");
+            t.setDaemon(true);
+            return t;
+        });
 
         AppLogger.log("[AdScheduler] Starting with " + allAds.size() + " ads");
 

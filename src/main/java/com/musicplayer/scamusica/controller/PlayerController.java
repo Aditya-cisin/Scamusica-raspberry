@@ -500,7 +500,11 @@ public class PlayerController extends Application {
         queueWorkerThread.start();
 
         // 🔥 START SCHEDULER
-        schedular = java.util.concurrent.Executors.newSingleThreadScheduledExecutor();
+        schedular = java.util.concurrent.Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "SyncScheduler");
+            t.setDaemon(true);
+            return t;
+        });
 
         schedular.scheduleAtFixedRate(() -> {
             operationQueue.add(() -> {
@@ -1045,13 +1049,25 @@ public class PlayerController extends Application {
         if (!playQueue.isEmpty() && albumImageView != null) {
             String firstImgUrl = playQueue.get(0).getAlbumImageUrl();
             if (firstImgUrl != null && !firstImgUrl.trim().isEmpty()) {
-                Platform.runLater(() -> {
+                Platform.runLater(() -> albumImageView.setImage(null));
+                new Thread(() -> {
                     try {
-                        albumImageView.setImage(null);
-                        albumImageView.setImage(new Image(firstImgUrl, 400, 400, true, true, true));
+                        Image image;
+                        if (firstImgUrl.startsWith("http")) {
+                            java.net.URLConnection connection = new java.net.URL(firstImgUrl).openConnection();
+                            connection.setRequestProperty("User-Agent", "Mozilla/5.0");
+                            connection.setConnectTimeout(5000);
+                            connection.setReadTimeout(5000);
+                            try (java.io.InputStream in = connection.getInputStream()) {
+                                image = new Image(in, 400, 400, true, true);
+                            }
+                        } else {
+                            image = new Image(firstImgUrl, 400, 400, true, true, true);
+                        }
+                        Platform.runLater(() -> albumImageView.setImage(image));
                     } catch (Exception ignored) {
                     }
-                });
+                }).start();
             }
         }
 
@@ -1117,13 +1133,25 @@ public class PlayerController extends Application {
             if (!playQueue.isEmpty() && albumImageView != null) {
                 String firstImgUrl = playQueue.get(0).getAlbumImageUrl();
                 if (firstImgUrl != null && !firstImgUrl.trim().isEmpty()) {
-                    Platform.runLater(() -> {
+                    Platform.runLater(() -> albumImageView.setImage(null));
+                    new Thread(() -> {
                         try {
-                            albumImageView.setImage(null);
-                            albumImageView.setImage(new Image(firstImgUrl, 400, 400, true, true, true));
+                            Image image;
+                            if (firstImgUrl.startsWith("http")) {
+                                java.net.URLConnection connection = new java.net.URL(firstImgUrl).openConnection();
+                                connection.setRequestProperty("User-Agent", "Mozilla/5.0");
+                                connection.setConnectTimeout(5000);
+                                connection.setReadTimeout(5000);
+                                try (java.io.InputStream in = connection.getInputStream()) {
+                                    image = new Image(in, 400, 400, true, true);
+                                }
+                            } else {
+                                image = new Image(firstImgUrl, 400, 400, true, true, true);
+                            }
+                            Platform.runLater(() -> albumImageView.setImage(image));
                         } catch (Exception ignored) {
                         }
-                    });
+                    }).start();
                 }
             }
 
@@ -1439,11 +1467,25 @@ public class PlayerController extends Application {
             albumImageView.setImage(null);
             String albumImgUrl = track.getAlbumImageUrl();
             if (albumImgUrl != null && !albumImgUrl.trim().isEmpty()) {
-                try {
-                    albumImageView.setImage(new Image(albumImgUrl, 400, 400, true, true, true));
-                } catch (Exception ex) {
-                    ex.printStackTrace();
-                }
+                new Thread(() -> {
+                    try {
+                        Image image;
+                        if (albumImgUrl.startsWith("http")) {
+                            java.net.URLConnection connection = new java.net.URL(albumImgUrl).openConnection();
+                            connection.setRequestProperty("User-Agent", "Mozilla/5.0");
+                            connection.setConnectTimeout(5000);
+                            connection.setReadTimeout(5000);
+                            try (java.io.InputStream in = connection.getInputStream()) {
+                                image = new Image(in, 400, 400, true, true);
+                            }
+                        } else {
+                            image = new Image(albumImgUrl, 400, 400, true, true, true);
+                        }
+                        Platform.runLater(() -> albumImageView.setImage(image));
+                    } catch (Exception ex) {
+                        ex.printStackTrace();
+                    }
+                }).start();
             }
         }
 

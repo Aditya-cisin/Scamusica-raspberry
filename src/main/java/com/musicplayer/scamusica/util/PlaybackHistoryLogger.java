@@ -41,7 +41,27 @@ public class PlaybackHistoryLogger {
         }
     }
 
+    private static final long MAX_LOG_SIZE = 5 * 1024 * 1024; // 5 MB
+
     public static synchronized void logSong(PlaylistTrack track) {
+
+        try {
+            // Cap the log file size — if over 5MB, keep only the last ~2MB
+            File logFile = new File(LOG_FILE);
+            if (logFile.exists() && logFile.length() > MAX_LOG_SIZE) {
+                try {
+                    byte[] allBytes = java.nio.file.Files.readAllBytes(logFile.toPath());
+                    int keepFrom = allBytes.length - (2 * 1024 * 1024);
+                    if (keepFrom > 0) {
+                        byte[] trimmed = java.util.Arrays.copyOfRange(allBytes, keepFrom, allBytes.length);
+                        java.nio.file.Files.write(logFile.toPath(), trimmed);
+                        AppLogger.log("[HISTORY] Log file trimmed from " + allBytes.length + " to " + trimmed.length + " bytes");
+                    }
+                } catch (Exception trimEx) {
+                    AppLogger.log("[HISTORY] Failed to trim log: " + trimEx.getMessage());
+                }
+            }
+        } catch (Exception ignored) {}
 
         try (BufferedWriter writer =
                      new BufferedWriter(new FileWriter(LOG_FILE, true))) {
