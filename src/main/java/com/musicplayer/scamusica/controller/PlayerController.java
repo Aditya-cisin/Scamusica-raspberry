@@ -105,6 +105,7 @@ public class PlayerController extends Application {
 
     private ScheduledExecutorService schedular;
     private BlockingQueue<Runnable> operationQueue = new LinkedBlockingQueue<>();
+    private java.util.concurrent.ExecutorService asyncExecutor = java.util.concurrent.Executors.newCachedThreadPool();
     private volatile boolean running = true;
     private List<Integer> lastServerIds = new ArrayList<>();
 
@@ -131,7 +132,8 @@ public class PlayerController extends Application {
                     }
                 }
             }
-        } catch (Exception ignored) {}
+        } catch (Exception ignored) {
+        }
 
         // === NETWORK MONITOR START ===
         NetworkMonitor.getInstance().start();
@@ -177,6 +179,9 @@ public class PlayerController extends Application {
                     downloadManager.stop();
                 } catch (Exception ignored) {
                 }
+            }
+            if (asyncExecutor != null) {
+                asyncExecutor.shutdownNow();
             }
         });
         VBox sidebar = sidebarUtil.createSidebar(sidebarTop, settingsIcon);
@@ -750,7 +755,7 @@ public class PlayerController extends Application {
                             if (encryptedFile.exists()) {
                                 AppLogger
                                         .log("[AdPlayer] Resuming from local file: " + encryptedFile.getAbsolutePath());
-                                new Thread(() -> {
+                                asyncExecutor.submit(() -> {
                                     try {
                                         if (currentTempFile != null && currentTempFile.exists()) {
                                             currentTempFile.delete();
@@ -763,7 +768,7 @@ public class PlayerController extends Application {
                                             String startTimeOpt = ":start-time=" + (savedTime / 1000.0f);
 
                                             vlcPlayer.audio().setVolume(0);
-                                            new Thread(() -> {
+                                            asyncExecutor.submit(() -> {
                                                 try {
                                                     for (int i = 0; i < 50; i++) {
                                                         vlcPlayer.audio().setVolume(0);
@@ -771,13 +776,13 @@ public class PlayerController extends Application {
                                                     }
                                                 } catch (Exception e) {
                                                 }
-                                            }).start();
+                                            });
 
                                             vlcPlayer.media().play(tempFile.getAbsolutePath(), startTimeOpt);
                                             vlcPlayer.audio().setVolume(0);
 
                                             schedular.schedule(() -> {
-                                                new Thread(() -> {
+                                                asyncExecutor.submit(() -> {
                                                     try {
                                                         vlcPlayer.audio().setVolume(0);
                                                         int steps = 20;
@@ -789,13 +794,13 @@ public class PlayerController extends Application {
                                                         vlcPlayer.audio().setVolume(originalVol);
                                                     } catch (Exception e) {
                                                     }
-                                                }).start();
+                                                });
                                             }, 1500, TimeUnit.MILLISECONDS);
                                         });
                                     } catch (Exception e) {
                                         e.printStackTrace();
                                     }
-                                }).start();
+                                });
                             } else if (NetworkMonitor.getInstance().isOnline()) {
                                 AppLogger.log("[AdPlayer] Resuming from URL: " + track.getUrl());
                                 int originalVol = (int) prefs.getDouble(PREF_VOLUME, 85.0);
@@ -803,7 +808,7 @@ public class PlayerController extends Application {
                                 String startTimeOpt = ":start-time=" + (savedTime / 1000.0f);
 
                                 vlcPlayer.audio().setVolume(0);
-                                new Thread(() -> {
+                                asyncExecutor.submit(() -> {
                                     try {
                                         for (int i = 0; i < 50; i++) {
                                             vlcPlayer.audio().setVolume(0);
@@ -811,13 +816,13 @@ public class PlayerController extends Application {
                                         }
                                     } catch (Exception e) {
                                     }
-                                }).start();
+                                });
 
                                 vlcPlayer.media().play(encodeMediaUrl(track.getUrl()), startTimeOpt);
                                 vlcPlayer.audio().setVolume(0);
 
                                 schedular.schedule(() -> {
-                                    new Thread(() -> {
+                                    asyncExecutor.submit(() -> {
                                         try {
                                             vlcPlayer.audio().setVolume(0);
                                             int steps = 20;
@@ -829,7 +834,7 @@ public class PlayerController extends Application {
                                             vlcPlayer.audio().setVolume(originalVol);
                                         } catch (Exception e) {
                                         }
-                                    }).start();
+                                    });
                                 }, 1500, TimeUnit.MILLISECONDS);
                             } else {
                                 AppLogger.log("[AdPlayer] Cannot resume — offline and no local file. Playing next.");
@@ -1034,15 +1039,15 @@ public class PlayerController extends Application {
     }
 
     private void loadPlaylistAndStart(String playlistName,
-                                      Label albumHeading,
-                                      Label titleLabel,
-                                      Slider progressSlider,
-                                      Label leftTime,
-                                      Label rightTime,
-                                      HBox controlsWrapper,
-                                      HBox bottomBar,
-                                      Label downloadLabel,
-                                      boolean autoPlay) throws URISyntaxException {
+            Label albumHeading,
+            Label titleLabel,
+            Slider progressSlider,
+            Label leftTime,
+            Label rightTime,
+            HBox controlsWrapper,
+            HBox bottomBar,
+            Label downloadLabel,
+            boolean autoPlay) throws URISyntaxException {
 
         stopPlayback(progressSlider, leftTime, rightTime, controlsWrapper, downloadLabel);
 
@@ -1050,16 +1055,19 @@ public class PlayerController extends Application {
             String firstImgUrl = playQueue.get(0).getAlbumImageUrl();
             if (firstImgUrl != null && !firstImgUrl.trim().isEmpty()) {
                 Platform.runLater(() -> albumImageView.setImage(null));
-                new Thread(() -> {
+                asyncExecutor.submit(() -> {
                     try {
                         Image image;
                         if (firstImgUrl.startsWith("http")) {
-                            java.net.URLConnection connection = new java.net.URL(firstImgUrl).openConnection();
+                            java.net.HttpURLConnection connection = (java.net.HttpURLConnection) new java.net.URL(firstImgUrl).openConnection();
                             connection.setRequestProperty("User-Agent", "Mozilla/5.0");
+                            connection.setRequestProperty("Connection", "close");
                             connection.setConnectTimeout(5000);
                             connection.setReadTimeout(5000);
                             try (java.io.InputStream in = connection.getInputStream()) {
                                 image = new Image(in, 400, 400, true, true);
+                            } finally {
+                                connection.disconnect();
                             }
                         } else {
                             image = new Image(firstImgUrl, 400, 400, true, true, true);
@@ -1067,7 +1075,7 @@ public class PlayerController extends Application {
                         Platform.runLater(() -> albumImageView.setImage(image));
                     } catch (Exception ignored) {
                     }
-                }).start();
+                });
             }
         }
 
@@ -1134,16 +1142,19 @@ public class PlayerController extends Application {
                 String firstImgUrl = playQueue.get(0).getAlbumImageUrl();
                 if (firstImgUrl != null && !firstImgUrl.trim().isEmpty()) {
                     Platform.runLater(() -> albumImageView.setImage(null));
-                    new Thread(() -> {
+                    asyncExecutor.submit(() -> {
                         try {
                             Image image;
                             if (firstImgUrl.startsWith("http")) {
-                                java.net.URLConnection connection = new java.net.URL(firstImgUrl).openConnection();
+                                java.net.HttpURLConnection connection = (java.net.HttpURLConnection) new java.net.URL(firstImgUrl).openConnection();
                                 connection.setRequestProperty("User-Agent", "Mozilla/5.0");
+                                connection.setRequestProperty("Connection", "close");
                                 connection.setConnectTimeout(5000);
                                 connection.setReadTimeout(5000);
                                 try (java.io.InputStream in = connection.getInputStream()) {
                                     image = new Image(in, 400, 400, true, true);
+                                } finally {
+                                    connection.disconnect();
                                 }
                             } else {
                                 image = new Image(firstImgUrl, 400, 400, true, true, true);
@@ -1151,7 +1162,7 @@ public class PlayerController extends Application {
                             Platform.runLater(() -> albumImageView.setImage(image));
                         } catch (Exception ignored) {
                         }
-                    }).start();
+                    });
                 }
             }
 
@@ -1407,7 +1418,7 @@ public class PlayerController extends Application {
         }
 
         final String text = String.format("%.0f%% %s (%d/%d)", percent, LanguageManager.createStringBinding("label" +
-                        ".download").get(),
+                ".download").get(),
                 currentGenreDownloadedCount.get(), currentGenreTotalFiles);
 
         boolean isDone = (currentGenreDownloadedCount.get() == currentGenreTotalFiles
@@ -1429,14 +1440,14 @@ public class PlayerController extends Application {
     }
 
     private void playTrack(Label albumHeading,
-                           Label titleLabel,
-                           Slider progressSlider,
-                           Label leftTime,
-                           Label rightTime,
-                           HBox controlsWrapper,
-                           HBox bottomBar,
-                           Label downloadLabel,
-                           boolean autoPlay) throws URISyntaxException {
+            Label titleLabel,
+            Slider progressSlider,
+            Label leftTime,
+            Label rightTime,
+            HBox controlsWrapper,
+            HBox bottomBar,
+            Label downloadLabel,
+            boolean autoPlay) throws URISyntaxException {
 
         if (playQueue.isEmpty())
             return;
@@ -1467,16 +1478,19 @@ public class PlayerController extends Application {
             albumImageView.setImage(null);
             String albumImgUrl = track.getAlbumImageUrl();
             if (albumImgUrl != null && !albumImgUrl.trim().isEmpty()) {
-                new Thread(() -> {
+                asyncExecutor.submit(() -> {
                     try {
                         Image image;
                         if (albumImgUrl.startsWith("http")) {
-                            java.net.URLConnection connection = new java.net.URL(albumImgUrl).openConnection();
+                            java.net.HttpURLConnection connection = (java.net.HttpURLConnection) new java.net.URL(albumImgUrl).openConnection();
                             connection.setRequestProperty("User-Agent", "Mozilla/5.0");
+                            connection.setRequestProperty("Connection", "close");
                             connection.setConnectTimeout(5000);
                             connection.setReadTimeout(5000);
                             try (java.io.InputStream in = connection.getInputStream()) {
                                 image = new Image(in, 400, 400, true, true);
+                            } finally {
+                                connection.disconnect();
                             }
                         } else {
                             image = new Image(albumImgUrl, 400, 400, true, true, true);
@@ -1485,7 +1499,7 @@ public class PlayerController extends Application {
                     } catch (Exception ex) {
                         ex.printStackTrace();
                     }
-                }).start();
+                });
             }
         }
 
@@ -1532,7 +1546,9 @@ public class PlayerController extends Application {
             if (encryptedFile.exists()) {
                 AppLogger.log("[PLAYER] Playing from local file: " + encryptedFile.getAbsolutePath());
                 final String fallbackUrl = safeUrl;
-                Thread decryptThread = new Thread(() -> {
+                asyncExecutor.submit(() -> {
+                    int originalPriority = Thread.currentThread().getPriority();
+                    Thread.currentThread().setPriority(Thread.MAX_PRIORITY);
                     try {
                         if (currentTempFile != null && currentTempFile.exists()) {
                             currentTempFile.delete();
@@ -1595,11 +1611,10 @@ public class PlayerController extends Application {
                                 }
                             });
                         }
+                    } finally {
+                        Thread.currentThread().setPriority(originalPriority);
                     }
                 });
-                decryptThread.setDaemon(true);
-                decryptThread.setPriority(Thread.MAX_PRIORITY);
-                decryptThread.start();
 
                 return;
             }
@@ -1641,11 +1656,7 @@ public class PlayerController extends Application {
             boolean autoPlay) {
 
         if (currentVlcListener != null) {
-            try {
-                vlcPlayer.events().removeMediaPlayerEventListener(currentVlcListener);
-            } catch (Exception ignored) {
-            }
-            currentVlcListener = null;
+            return;
         }
 
         currentVlcListener = new MediaPlayerEventAdapter() {
@@ -1742,13 +1753,13 @@ public class PlayerController extends Application {
     }
 
     private void playNextTrack(Label albumHeading,
-                               Label titleLabel,
-                               Slider progressSlider,
-                               Label leftTime,
-                               Label rightTime,
-                               HBox controlsWrapper,
-                               HBox bottomBar,
-                               Label downloadLabel) throws URISyntaxException {
+            Label titleLabel,
+            Slider progressSlider,
+            Label leftTime,
+            Label rightTime,
+            HBox controlsWrapper,
+            HBox bottomBar,
+            Label downloadLabel) throws URISyntaxException {
 
         currentTrackIndex++;
         AppLogger.log("[PLAYER] Next track index: " + currentTrackIndex);
@@ -1771,13 +1782,13 @@ public class PlayerController extends Application {
     }
 
     private void setupBigPlayBehaviour(Label albumHeading,
-                                       Label titleLabel,
-                                       HBox controlsWrapper,
-                                       Slider progressSlider,
-                                       Label leftTime,
-                                       Label rightTime,
-                                       HBox bottomBar,
-                                       Label downloadLabel) {
+            Label titleLabel,
+            HBox controlsWrapper,
+            Slider progressSlider,
+            Label leftTime,
+            Label rightTime,
+            HBox bottomBar,
+            Label downloadLabel) {
 
         Button bigPlayBtn;
         StackPane playContainer;
@@ -1855,19 +1866,13 @@ public class PlayerController extends Application {
     }
 
     private void stopPlayback(Slider progressSlider,
-                              Label leftTime,
-                              Label rightTime,
-                              HBox controlsWrapper,
-                              Label downloadLabel) {
+            Label leftTime,
+            Label rightTime,
+            HBox controlsWrapper,
+            Label downloadLabel) {
 
-        if (currentVlcListener != null) {
-            try {
-                vlcPlayer.events().removeMediaPlayerEventListener(currentVlcListener);
-            } catch (Exception ignored) {
-            }
-            currentVlcListener = null;
-        }
-        vlcHandlersAttached = false;
+        // Intentionally NOT removing VLC listener or setting vlcHandlersAttached to false
+        // to prevent JNA native callback memory leaks
 
         if (currentTempFile != null) {
             try {
@@ -1971,8 +1976,8 @@ public class PlayerController extends Application {
         File tempFile = new File(tempDir, "play_" + System.currentTimeMillis() + ".mp3");
 
         try (FileInputStream fis = new FileInputStream(encryptedFile);
-             CipherInputStream cis = CryptoUtil.decrypt(fis);
-             FileOutputStream fos = new FileOutputStream(tempFile)) {
+                CipherInputStream cis = CryptoUtil.decrypt(fis);
+                FileOutputStream fos = new FileOutputStream(tempFile)) {
 
             byte[] buffer = new byte[8192];
             int read;

@@ -74,6 +74,13 @@ public class AdScheduler {
             allAds.clear();
             if (newAds != null) {
                 allAds.addAll(newAds);
+                Set<Integer> validIds = newAds.stream()
+                        .filter(ad -> ad.getId() != null)
+                        .map(Ad::getId)
+                        .collect(java.util.stream.Collectors.toSet());
+                lastPlayedTime.keySet().retainAll(validIds);
+            } else {
+                lastPlayedTime.clear();
             }
         }
         AppLogger.log("[AdScheduler] Updated with " + allAds.size() + " ads");

@@ -46,19 +46,15 @@ public class PlaybackHistoryLogger {
     public static synchronized void logSong(PlaylistTrack track) {
 
         try {
-            // Cap the log file size — if over 5MB, keep only the last ~2MB
+            // Cap the log file size — if over 5MB, delete it to prevent huge memory spikes
             File logFile = new File(LOG_FILE);
             if (logFile.exists() && logFile.length() > MAX_LOG_SIZE) {
                 try {
-                    byte[] allBytes = java.nio.file.Files.readAllBytes(logFile.toPath());
-                    int keepFrom = allBytes.length - (2 * 1024 * 1024);
-                    if (keepFrom > 0) {
-                        byte[] trimmed = java.util.Arrays.copyOfRange(allBytes, keepFrom, allBytes.length);
-                        java.nio.file.Files.write(logFile.toPath(), trimmed);
-                        AppLogger.log("[HISTORY] Log file trimmed from " + allBytes.length + " to " + trimmed.length + " bytes");
-                    }
-                } catch (Exception trimEx) {
-                    AppLogger.log("[HISTORY] Failed to trim log: " + trimEx.getMessage());
+                    logFile.delete();
+                    logFile.createNewFile();
+                    AppLogger.log("[HISTORY] Log file exceeded 5MB and was reset to prevent memory spikes.");
+                } catch (Exception deleteEx) {
+                    AppLogger.log("[HISTORY] Failed to reset log: " + deleteEx.getMessage());
                 }
             }
         } catch (Exception ignored) {}

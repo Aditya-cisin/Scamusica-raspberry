@@ -21,6 +21,7 @@ com/musicplayer/scamusica/service/InternetState.class
 com/musicplayer/scamusica/ui/LeavingPopup.class
 com/musicplayer/scamusica/service/PlaylistApiService.class
 com/musicplayer/scamusica/util/OfflineCache.class
+com/musicplayer/scamusica/model/AdAudio.class
 com/musicplayer/scamusica/util/ApiClient.class
 com/musicplayer/scamusica/controller/PlayerController.class
 com/musicplayer/scamusica/service/AdDownloadManager.class

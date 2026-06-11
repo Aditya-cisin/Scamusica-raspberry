@@ -5,6 +5,7 @@
 /home/cis/Videos/raspberry/Scamusica-raspberry/src/main/java/com/musicplayer/scamusica/manager/LanguageManager.java
 /home/cis/Videos/raspberry/Scamusica-raspberry/src/main/java/com/musicplayer/scamusica/manager/SessionManager.java
 /home/cis/Videos/raspberry/Scamusica-raspberry/src/main/java/com/musicplayer/scamusica/model/Ad.java
+/home/cis/Videos/raspberry/Scamusica-raspberry/src/main/java/com/musicplayer/scamusica/model/AdAudio.java
 /home/cis/Videos/raspberry/Scamusica-raspberry/src/main/java/com/musicplayer/scamusica/model/PlaylistTrack.java
 /home/cis/Videos/raspberry/Scamusica-raspberry/src/main/java/com/musicplayer/scamusica/service/AdDownloadManager.java
 /home/cis/Videos/raspberry/Scamusica-raspberry/src/main/java/com/musicplayer/scamusica/service/AdPlayer.java

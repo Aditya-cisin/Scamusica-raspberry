@@ -34,8 +34,16 @@ import java.net.http.HttpResponse;
 import java.security.KeyStore;
 import java.time.Duration;
 
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
 public class CodeVerificationController extends Application {
 
+    private static final ExecutorService executor = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "CodeVerification-Thread");
+        t.setDaemon(true);
+        return t;
+    });
 
     private static HttpClient client;
 
@@ -315,7 +323,7 @@ public class CodeVerificationController extends Application {
                 );
                 messageText.setFill(Color.GREEN);
 
-                new Thread(() -> {
+                executor.submit(() -> {
                     try {
                         try {
                             TrustManagerFactory tmf = TrustManagerFactory
@@ -395,7 +403,7 @@ public class CodeVerificationController extends Application {
                     } finally {
                         Platform.runLater(() -> loginButton.setDisable(false));
                     }
-                }).start();
+                });
 
             } else {
                 Platform.runLater(() -> {
